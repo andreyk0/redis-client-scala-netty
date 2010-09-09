@@ -1,0 +1,6 @@
+Why yet another scala client?
+- binary safe values
+- asynchronous calls
+- protocol pipelining
+
+We are working on this code @fotolog.com, decided to open it up in case somebody else finds it useful.
