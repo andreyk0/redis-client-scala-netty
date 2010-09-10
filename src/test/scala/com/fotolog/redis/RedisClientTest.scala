@@ -1,12 +1,12 @@
 package com.fotolog.redis
 
-import com.fotolog.junit.FotologTestCase
+import junit.framework.TestCase
 
 import org.junit._
 import Assert._
 import Conversions._
 
-class RedisClientTest extends FotologTestCase {
+class RedisClientTest extends TestCase {
 	val c = RedisClient()
 
 	override def setUp() = super.setUp; c.flushall

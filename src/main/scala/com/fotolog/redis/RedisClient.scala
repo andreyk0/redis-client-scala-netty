@@ -26,12 +26,12 @@ object KeyType {
 
 object Conversions {
 	import RedisClientTypes._
-	import com.google.protobuf.Message
 
 //	implicit def getValueFromTheFuture[T](f: Future[T]): T = f.get()
+//	implicit def convertProtobufToByteArray(m: Message): BinVal = m.toByteArray
+
 	implicit def convertStringToByteArray(s: String): BinVal = s.getBytes
 	implicit def convertByteArrayToString(b: BinVal): String = new String(b)
-	implicit def convertProtobufToByteArray(m: Message): BinVal = m.toByteArray
 }
 
 object RedisClient {
