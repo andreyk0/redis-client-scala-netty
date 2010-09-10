@@ -20,6 +20,7 @@ define "redis-client-scala-netty" do
 
   compile.with 'org.jboss.netty:netty:jar:3.1.5.GA'
   compile.with 'apache-log4j:log4j:jar:1.2.15'
+  compile.using :other=>'-g:line', :optimise=>'true'
 
   test.using :junit
 
