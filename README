@@ -25,11 +25,20 @@ val cluster = new RedisCluster[String](shardingHashFun, RedisHost("localhost", 6
 
 val r = cluster("egusername") // get redis client
 
+// basic
+
 r.set("foo", "bar")
 r.get("foo") // byte arrays by default
 r.get[String]("foo") // typed, hints at implicit conversion
+
+// lists
 
 r.lpush("ll", "l1")
 r.lpush("ll", "l2")
 r.lrange[String]("ll", 0, 100)
 r.lpop[String]("ll")
+
+// async calls
+val future = r.lpopAsync[String]("ll") // prefetch data
+// .... do something else
+future.get
