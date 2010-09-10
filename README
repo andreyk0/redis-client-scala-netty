@@ -8,5 +8,28 @@ We are working on this code @fotolog.com, decided to open it up in case somebody
 
 To build (requires buildr tool from http://buildr.apache.org/):
 $ buildr package
+Ruby gem system is a bit quirky on ubuntu 10.04, so, download buildr-1.4.1.gem from http://rubygems.org/ and
+$ export JAVA_HOME=/path/to/your/java
+$ sudo gem install buildr-1.4.1.gem
+$ export PATH=/var/lib/gems/1.8/bin:$PATH
 
 Unit tests assume redis running on localhost on default port, THEY WILL FLUSH ALL DATA!
+
+Example usage:
+
+import com.fotolog.redis._
+import Conversions._
+
+val shardingHashFun = (s:String)=>s.hashCode // shard on string values
+val cluster = new RedisCluster[String](shardingHashFun, RedisHost("localhost", 6379) /*, more redis hosts */)
+
+val r = cluster("egusername") // get redis client
+
+r.set("foo", "bar")
+r.get("foo") // byte arrays by default
+r.get[String]("foo") // typed, hints at implicit conversion
+
+r.lpush("ll", "l1")
+r.lpush("ll", "l2")
+r.lrange[String]("ll", 0, 100)
+r.lpop[String]("ll")
