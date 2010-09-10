@@ -2,5 +2,11 @@ Why yet another scala client?
 - binary safe values
 - asynchronous calls
 - protocol pipelining
+- connection multiplexing
 
 We are working on this code @fotolog.com, decided to open it up in case somebody else finds it useful.
+
+To build (requires buildr tool from http://buildr.apache.org/):
+$ buildr package
+
+Unit tests assume redis running on localhost on default port, THEY WILL FLUSH ALL DATA!
