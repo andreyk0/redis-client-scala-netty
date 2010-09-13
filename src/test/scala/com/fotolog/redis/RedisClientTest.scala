@@ -7,7 +7,7 @@ import Assert._
 import Conversions._
 
 class RedisClientTest extends TestCase {
-    val c = RedisClient()
+    val c = RedisClient("localhost", 6381) // non-default port, just in case as this wipes out all data
 
     override def setUp() = super.setUp; c.flushall
     override def tearDown() = c.flushall

@@ -13,11 +13,15 @@ $ export JAVA_HOME=/path/to/your/java
 $ sudo gem install buildr-1.4.1.gem
 $ export PATH=/var/lib/gems/1.8/bin:$PATH
 
-Unit tests assume redis running on localhost on default port, THEY WILL FLUSH ALL DATA!
+Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH ALL DATA!
+To quickly build/package without running the tests:
+$ buildr package test=no
 
-Example usage:
 
-import com.fotolog.redis._
+Example usage with scala REPL
+$ buildr shell
+
+import com.fotolog.redis.{RedisCluster, RedisClient, RedisHost, Conversions}
 import Conversions._
 
 val shardingHashFun = (s:String)=>s.hashCode // shard on string values
@@ -32,11 +36,15 @@ r.get("foo") // byte arrays by default
 r.get[String]("foo") // typed, hints at implicit conversion
 
 // lists
-
 r.lpush("ll", "l1")
 r.lpush("ll", "l2")
 r.lrange[String]("ll", 0, 100)
 r.lpop[String]("ll")
+
+// sets
+r.sadd("ss", "foo")
+r.sadd("ss", "bar")
+r.smembers[String]("ss")
 
 // async calls
 val future = r.lpopAsync[String]("ll") // prefetch data
