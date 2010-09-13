@@ -126,4 +126,11 @@ class RedisClientTest extends TestCase {
         assertTrue(c.hdel("hk", "foo"))
         assertFalse(c.hexists("hk", "foo"))
     }
+
+    def testSets() {
+        assertTrue(c.sadd("set1", "foo"))
+        assertFalse(c.sadd("set1", "foo"))
+        assertTrue(c.srem("set1", "foo"))
+        assertFalse(c.srem("set1", "foo"))
+    }
 }

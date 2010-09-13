@@ -18,8 +18,6 @@ import RedisClientTypes._
 
 // tested with 2.1.3 redis, ubuntu 10.04 ships with 1.2.0 where some newer commands won't work
 sealed abstract class Cmd
-case class Ping() extends Cmd
-case class Info() extends Cmd
 case class Exists(key: String) extends Cmd
 case class Type(key: String) extends Cmd
 case class Del(key: String*) extends Cmd
@@ -58,7 +56,24 @@ case class Hlen(key: String) extends Cmd
 case class Hkeys(key: String) extends Cmd
 case class Hvals(key: String) extends Cmd
 case class Hgetall(key: String) extends Cmd
+// sets
+case class Sadd(kv: KV) extends Cmd
+case class Srem(kv: KV) extends Cmd
+case class Spop(key: String) extends Cmd
+case class Smove(srcKey: String, destKey: String, value: BinVal) extends Cmd
+case class Scard(key: String) extends Cmd
+case class Sismember(kv: KV) extends Cmd
+case class Sinter(keys: String*) extends Cmd
+case class Sinterstore(destKey: String, keys: String*) extends Cmd
+case class Sunion(keys: String*) extends Cmd
+case class Sunionstore(destKey: String, keys: String*) extends Cmd
+case class Sdiff(keys: String*) extends Cmd
+case class Sdiffstore(destKey: String, keys: String*) extends Cmd
+case class Smembers(key: String) extends Cmd
+case class Srandmember(key: String) extends Cmd
 //
+case class Ping() extends Cmd
+case class Info() extends Cmd
 case class FlushAll() extends Cmd
 
 
@@ -93,7 +108,7 @@ class ResultFuture(val cmd: Cmd) extends Future[Result] {
 object RedisConnection {
     private[redis] type OpQueue = ArrayBlockingQueue[ResultFuture]
     
-    private[redis]     val log = Logger.getLogger(getClass)
+    private[redis] val log = Logger.getLogger(getClass)
     
     private[redis] val channelFactory = {
             new NioClientSocketChannelFactory(
@@ -245,7 +260,6 @@ private[redis] object RedisCommandEncoder {
     val BLPOP = "BLPOP".getBytes
     val BRPOP = "BRPOP".getBytes
     val RPOPLPUSH = "RPOPLPUSH".getBytes
-    val SORT = "SORT".getBytes
     val HSET = "HSET".getBytes
     val HGET = "HGET".getBytes
     val HMGET = "HMGET".getBytes
@@ -257,6 +271,21 @@ private[redis] object RedisCommandEncoder {
     val HKEYS = "HKEYS".getBytes
     val HVALS = "HVALS".getBytes
     val HGETALL = "HGETALL".getBytes
+    val SADD = "SADD".getBytes
+    val SREM = "SREM".getBytes
+    val SPOP = "SPOP".getBytes
+    val SMOVE = "SMOVE".getBytes
+    val SCARD = "SCARD".getBytes
+    val SISMEMBER = "SISMEMBER".getBytes
+    val SINTER = "SINTER".getBytes
+    val SINTERSTORE = "SINTERSTORE".getBytes
+    val SUNION = "SUNION".getBytes
+    val SUNIONSTORE = "SUNIONSTORE".getBytes
+    val SDIFF = "SDIFF".getBytes
+    val SDIFFSTORE = "SDIFFSTORE".getBytes
+    val SMEMBERS = "SMEMBERS".getBytes
+    val SRANDMEMBER = "SRANDMEMBER".getBytes
+    val SORT = "SORT".getBytes
     val PING = "PING".getBytes 
     val EXISTS = "EXISTS".getBytes
     val TYPE = "TYPE".getBytes
@@ -316,6 +345,20 @@ private[redis] class RedisCommandEncoder() extends org.jboss.netty.handler.codec
         case Hkeys(key) => binaryCmd(HKEYS, key.getBytes)
         case Hvals(key) => binaryCmd(HVALS, key.getBytes)
         case Hgetall(key) => binaryCmd(HGETALL, key.getBytes)
+        case Sadd((key, value)) => binaryCmd(SADD, key.getBytes, value)
+        case Srem((key, value)) => binaryCmd(SREM, key.getBytes, value)
+        case Spop(key) => copiedBuffer(SPOP, SPACE, key.getBytes, EOL)
+        case Smove(srcKey, destKey, value) => binaryCmd(SMOVE, srcKey.getBytes, destKey.getBytes, value)
+        case Scard(key) => copiedBuffer(SCARD, SPACE, key.getBytes, EOL)
+        case Sismember((key, value)) => binaryCmd(SISMEMBER, key.getBytes, value)
+        case Sinter(keys @ _*) => binaryCmd(SINTER :: keys.toList.map{_.getBytes}: _*)
+        case Sinterstore(destKey, keys @ _*) => binaryCmd(SINTERSTORE :: destKey.getBytes :: keys.toList.map{_.getBytes}: _*)
+        case Sunion(keys @ _*) => binaryCmd(SUNION:: keys.toList.map{_.getBytes}: _*)
+        case Sunionstore(destKey, keys @ _*) => binaryCmd(SUNIONSTORE:: destKey.getBytes :: keys.toList.map{_.getBytes}: _*)
+        case Sdiff(keys @ _*) => binaryCmd(SDIFF :: keys.toList.map{_.getBytes}: _*)
+        case Sdiffstore(destKey, keys @ _*) => binaryCmd(SDIFFSTORE :: destKey.getBytes :: keys.toList.map{_.getBytes}: _*)
+        case Smembers(key) => copiedBuffer(SMEMBERS, SPACE, key.getBytes, EOL)
+        case Srandmember(key) => copiedBuffer(SRANDMEMBER, SPACE, key.getBytes, EOL)
         case Ping() => copiedBuffer(PING, EOL)
         case Exists(key) => copiedBuffer(EXISTS, SPACE, key.getBytes, EOL)
         case Type(key) => copiedBuffer(TYPE, SPACE, key.getBytes, EOL)

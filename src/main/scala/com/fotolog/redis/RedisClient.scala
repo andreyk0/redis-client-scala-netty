@@ -36,6 +36,7 @@ object Conversions {
 
 object RedisClient {
     import RedisClientTypes._
+    import scala.collection.{ Set => SCSet }
 
     def apply(): RedisClient = new RedisClient(new RedisConnection)
     def apply(host: String, port: Int) = new RedisClient(new RedisConnection(host, port))
@@ -66,6 +67,13 @@ object RedisClient {
         }}.map{ r => convert(r.data.get)}
     }
 
+    private[redis] def multiBulkDataResultToSet[T](convert: (BinVal)=>T): PartialFunction[Result, SCSet[T]] = {
+        case MultiBulkDataResult(results) => SCSet.empty[T] ++ results.filter{ r => r match {
+                case BulkDataResult(Some(_)) => true
+                case BulkDataResult(None) => false
+        }}.map{ r => convert(r.data.get)}
+    }
+
     private[redis] def multiBulkDataResultToMap[T](keys: Seq[String], convert: (BinVal)=>T): PartialFunction[Result, Map[String,T]] = {
         case BulkDataResult(data) => data match {
             case None => Map()
@@ -88,8 +96,10 @@ class RedisClient(val r: RedisConnection) {
     import RedisClient.okResultAsBoolean
     import RedisClient.bulkDataResultToOpt
     import RedisClient.multiBulkDataResultToFilteredSeq
+    import RedisClient.multiBulkDataResultToSet
     import RedisClient.multiBulkDataResultToMap
     import Conversions._
+    import scala.collection.{ Set => SCSet }
 
     def isConnected(): Boolean = r.isOpen
     def shutdown() { r.shutdown }
@@ -253,6 +263,48 @@ class RedisClient(val r: RedisConnection) {
         }
     }
     def hgetall[T](key: String)(implicit convert: (BinVal)=>T): Map[String,T] = hgetallAsync(key)(convert).get
+
+    def saddAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Sadd(key->convert(value))))(integerResultAsBoolean)
+    def sadd[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = saddAsync(key,value)(convert).get
+
+    def sremAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Srem(key->convert(value))))(integerResultAsBoolean)
+    def srem[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = sremAsync(key,value)(convert).get
+
+    def spopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Spop(key)))(bulkDataResultToOpt(convert))
+    def spop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = spopAsync(key)(convert).get
+
+    def smoveAsync[T](srcKey: String, destKey: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Smove(srcKey, destKey, convert(value))))(integerResultAsBoolean)
+    def smove[T](srcKey: String, destKey: String, value: T)(implicit convert: (T)=>BinVal): Boolean = smoveAsync(srcKey, destKey, value)(convert).get
+
+    def scardAsync(key: String): Future[Int] = ClientFuture(r(Scard(key)))(integerResultAsInt)
+    def scard(key: String): Int = scardAsync(key).get
+
+    def sismemberAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Sismember(key->convert(value))))(integerResultAsBoolean)
+    def sismember[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = sismemberAsync(key, value)(convert).get
+
+    def sinterAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sinter(keys: _*)))(multiBulkDataResultToSet(convert))
+    def sinter[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sinterAsync(keys: _*)(convert).get
+
+    def sinterstoreAsync[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sinterstore(destKey, keys: _*)))(multiBulkDataResultToSet(convert))
+    def sinterstore[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sinterstoreAsync(destKey, keys: _*)(convert).get
+
+    def sunionAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sunion(keys: _*)))(multiBulkDataResultToSet(convert))
+    def sunion[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sunionAsync(keys: _*)(convert).get
+
+    def sunionstoreAsync[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sunionstore(destKey, keys: _*)))(multiBulkDataResultToSet(convert))
+    def sunionstore[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sunionstoreAsync(destKey, keys: _*)(convert).get
+
+    def sdiffAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sdiff(keys: _*)))(multiBulkDataResultToSet(convert))
+    def sdiff[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sdiffAsync(keys: _*)(convert).get
+
+    def sdiffstoreAsync[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sdiffstore(destKey, keys: _*)))(multiBulkDataResultToSet(convert))
+    def sdiffstore[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sdiffstoreAsync(destKey, keys: _*)(convert).get
+
+    def smembersAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Smembers(key)))(multiBulkDataResultToSet(convert))
+    def smembers[T](key: String)(implicit convert: (BinVal)=>T): SCSet[T] = smembersAsync(key)(convert).get
+
+    def srandmemberAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Srandmember(key)))(bulkDataResultToOpt(convert))
+    def srandmember[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = srandmemberAsync(key)(convert).get
 }
 
 object ClientFuture {
