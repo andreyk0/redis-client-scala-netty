@@ -7,7 +7,7 @@ import Assert._
 import Conversions._
 
 class RedisClientTest extends TestCase {
-    val c = RedisClient("localhost", 6381) // non-default port, just in case as this wipes out all data
+    val c = RedisClient("localhost", 6380) // non-default port, just in case as this wipes out all data
 
     override def setUp() = super.setUp; c.flushall
     override def tearDown() = c.flushall
@@ -128,9 +128,44 @@ class RedisClientTest extends TestCase {
     }
 
     def testSets() {
+        import scala.collection.{ Set => SCSet }
         assertTrue(c.sadd("set1", "foo"))
         assertFalse(c.sadd("set1", "foo"))
         assertTrue(c.srem("set1", "foo"))
         assertFalse(c.srem("set1", "foo"))
+
+        assertTrue(c.sadd("set1", "foo"))
+        assertEquals(Option("foo"), c.spop[String]("set1"))
+        assertFalse(c.srem("set1", "foo"))
+
+
+        assertTrue(c.sadd("set1", "foo"))
+        assertTrue(c.smove("set1", "set2", "foo"))
+        assertEquals(None, c.spop[String]("set1"))
+        assertEquals(Option("foo"), c.spop[String]("set2"))
+
+        assertEquals(0, c.scard("set1"))
+        assertTrue(c.sadd("set1", "foo"))
+        assertEquals(1, c.scard("set1"))
+        assertTrue(c.sadd("set1", "bar"))
+        assertEquals(2, c.scard("set1"))
+
+        assertTrue(c.sismember("set1", "foo"))
+        assertTrue(c.sismember("set1", "bar"))
+        assertFalse(c.sismember("set1", "boo"))
+
+        assertTrue(c.sadd("set1", "baz"))
+        assertTrue(c.sadd("set2", "foo"))
+        assertTrue(c.sadd("set2", "bar"))
+        assertTrue(c.sadd("set2", "blah"))
+
+        assertEquals(SCSet("foo", "bar", "baz"), c.smembers[String]("set1"))
+        assertEquals(SCSet("foo", "bar", "blah"), c.smembers[String]("set2"))
+
+        assertEquals(SCSet("foo", "bar"), c.sinter[String]("set1", "set2"))
+        assertEquals(SCSet("foo", "bar", "baz", "blah"), c.sunion[String]("set1", "set2"))
+        assertEquals(SCSet("baz"), c.sdiff[String]("set1", "set2"))
+        assertEquals(SCSet("blah"), c.sdiff[String]("set2", "set1"))
+
     }
 }
