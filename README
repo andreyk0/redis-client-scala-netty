@@ -6,6 +6,8 @@ Why yet another scala client?
 
 We are working on this code @fotolog.com, decided to open it up in case somebody else finds it useful.
 
+Tested with Redis version 2.0.1, some commands won't work with older version
+
 To build (requires buildr tool from http://buildr.apache.org/):
 $ buildr package
 Ruby gem system is a bit quirky on ubuntu 10.04, so, download buildr-1.4.1.gem from http://rubygems.org/ and
