@@ -107,17 +107,11 @@ class ResultFuture(val cmd: Cmd) extends Future[Result] {
 
 object RedisConnection {
     private[redis] type OpQueue = ArrayBlockingQueue[ResultFuture]
-    
-    private[redis] val log = Logger.getLogger(getClass)
-    
-    private[redis] val channelFactory = {
-            new NioClientSocketChannelFactory(
-                    Executors.newCachedThreadPool(),
-                    Executors.newCachedThreadPool())
-    }
-    
-    private[redis] val commandEncoder = new RedisCommandEncoder() // stateless
 
+    private[redis] val log = Logger.getLogger(getClass)
+    private[redis] val executor = Executors.newCachedThreadPool()
+    private[redis] val channelFactory = new NioClientSocketChannelFactory(executor, executor)
+    private[redis] val commandEncoder = new RedisCommandEncoder() // stateless
     private[redis] val cmdQueue = new ArrayBlockingQueue[Pair[RedisConnection, ResultFuture]](2048)
 
     scala.actors.Actor.actor { while(true) {
@@ -159,6 +153,7 @@ class RedisConnection(val host: String = "localhost", val port: Int = 6379)
 
     clientBootstrap.setOption("tcpNoDelay", true);
     clientBootstrap.setOption("keepAlive", true);
+    clientBootstrap.setOption("connectTimeoutMillis", 1000)
 
     private[RedisConnection] val channel = {
         val future = clientBootstrap.connect(new InetSocketAddress(host, port));
