@@ -167,5 +167,16 @@ class RedisClientTest extends TestCase {
         assertEquals(SCSet("baz"), c.sdiff[String]("set1", "set2"))
         assertEquals(SCSet("blah"), c.sdiff[String]("set2", "set1"))
 
+
+        assertEquals(2, c.sinterstore("setX", "set1", "set2"))
+        assertEquals(SCSet("foo", "bar"), c.smembers[String]("setX"))
+
+        assertEquals(4, c.sunionstore("setX", "set1", "set2"))
+        assertEquals(SCSet("foo", "bar", "baz", "blah"), c.smembers[String]("setX"))
+
+        assertEquals(1, c.sdiffstore("setX", "set1", "set2"))
+        assertEquals(SCSet("baz"), c.smembers[String]("setX"))
+
+        assertTrue(SCSet("foo", "bar", "baz").contains(c.srandmember[String]("set1").get))
     }
 }

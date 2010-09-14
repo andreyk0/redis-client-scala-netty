@@ -285,20 +285,20 @@ class RedisClient(val r: RedisConnection) {
     def sinterAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sinter(keys: _*)))(multiBulkDataResultToSet(convert))
     def sinter[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sinterAsync(keys: _*)(convert).get
 
-    def sinterstoreAsync[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sinterstore(destKey, keys: _*)))(multiBulkDataResultToSet(convert))
-    def sinterstore[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sinterstoreAsync(destKey, keys: _*)(convert).get
+    def sinterstoreAsync[T](destKey: String, keys: String*): Future[Int] = ClientFuture(r(Sinterstore(destKey, keys: _*)))(integerResultAsInt)
+    def sinterstore[T](destKey: String, keys: String*): Int = sinterstoreAsync(destKey, keys: _*).get
 
     def sunionAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sunion(keys: _*)))(multiBulkDataResultToSet(convert))
     def sunion[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sunionAsync(keys: _*)(convert).get
 
-    def sunionstoreAsync[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sunionstore(destKey, keys: _*)))(multiBulkDataResultToSet(convert))
-    def sunionstore[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sunionstoreAsync(destKey, keys: _*)(convert).get
+    def sunionstoreAsync[T](destKey: String, keys: String*): Future[Int] = ClientFuture(r(Sunionstore(destKey, keys: _*)))(integerResultAsInt)
+    def sunionstore[T](destKey: String, keys: String*): Int = sunionstoreAsync(destKey, keys: _*).get
 
     def sdiffAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sdiff(keys: _*)))(multiBulkDataResultToSet(convert))
     def sdiff[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sdiffAsync(keys: _*)(convert).get
 
-    def sdiffstoreAsync[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sdiffstore(destKey, keys: _*)))(multiBulkDataResultToSet(convert))
-    def sdiffstore[T](destKey: String, keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sdiffstoreAsync(destKey, keys: _*)(convert).get
+    def sdiffstoreAsync[T](destKey: String, keys: String*): Future[Int] = ClientFuture(r(Sdiffstore(destKey, keys: _*)))(integerResultAsInt)
+    def sdiffstore[T](destKey: String, keys: String*): Int = sdiffstoreAsync(destKey, keys: _*).get
 
     def smembersAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Smembers(key)))(multiBulkDataResultToSet(convert))
     def smembers[T](key: String)(implicit convert: (BinVal)=>T): SCSet[T] = smembersAsync(key)(convert).get
