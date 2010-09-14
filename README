@@ -50,3 +50,11 @@ r.smembers[String]("ss")
 val future = r.lpopAsync[String]("ll") // prefetch data
 // .... do something else
 future.get
+
+// explicit encoding/decoding of binary values
+r.set("boo", "foo") { x: String =>
+    x.getBytes("UTF-8")
+}
+r.get("boo") { x: Array[Byte] =>
+    new String(x, "UTF-8")
+}
