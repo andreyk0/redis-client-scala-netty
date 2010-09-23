@@ -179,4 +179,19 @@ class RedisClientTest extends TestCase {
 
         assertTrue(SCSet("foo", "bar", "baz").contains(c.srandmember[String]("set1").get))
     }
+
+
+    def testIntConversions(){
+        testIntVals.foreach{ i=>
+            assertTrue(c.set("foo", i))
+            assertEquals(Some(i), c.get[Int]("foo"))
+        }
+        testLongVals.foreach{ i=>
+            assertTrue(c.set("foo", i))
+            assertEquals(Some(i), c.get[Long]("foo"))
+        }
+    }
+
+    private def testIntVals(): List[Int] = 0 :: {for(i<-0 to 30) yield List(1<<i,-(1<<i))}.toList.flatten
+    private def testLongVals(): List[Long] = 0l :: {for(i<-0 to 62) yield List(1l<<i,-(1l<<i))}.toList.flatten
 }

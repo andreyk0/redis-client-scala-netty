@@ -24,15 +24,56 @@ object KeyType {
     case object Hash extends KeyType // contains a Hash value
 }
 
-object Conversions {
+trait StringConversions {
     import RedisClientTypes._
-
-//    implicit def getValueFromTheFuture[T](f: Future[T]): T = f.get()
-//    implicit def convertProtobufToByteArray(m: Message): BinVal = m.toByteArray
-
     implicit def convertStringToByteArray(s: String): BinVal = s.getBytes
     implicit def convertByteArrayToString(b: BinVal): String = new String(b)
 }
+trait FixedIntConversions {
+    import RedisClientTypes._
+
+    implicit def convertIntToByteArray(i: Int): Array[Byte] = {
+        Array[Byte](
+            ((i     )&0xFF).asInstanceOf[Byte],
+            ((i>>  8)&0xFF).asInstanceOf[Byte],
+            ((i>> 16)&0xFF).asInstanceOf[Byte],
+            ((i>> 24)&0xFF).asInstanceOf[Byte]
+        )
+    }
+    implicit def convertByteArrayToInt(b: Array[Byte]): Int = {
+        (b(0).asInstanceOf[Int] & 0xFF)       |
+        (b(1).asInstanceOf[Int] & 0xFF) << 8  |
+        (b(2).asInstanceOf[Int] & 0xFF) << 16 |
+        (b(3).asInstanceOf[Int] & 0xFF) << 24
+    }
+
+    implicit def convertLongToByteArray(i: Long): Array[Byte] = {
+        Array[Byte](
+            ((i     )&0xFF).asInstanceOf[Byte],
+            ((i>>  8)&0xFF).asInstanceOf[Byte],
+            ((i>> 16)&0xFF).asInstanceOf[Byte],
+            ((i>> 24)&0xFF).asInstanceOf[Byte],
+            ((i>> 32)&0xFF).asInstanceOf[Byte],
+            ((i>> 40)&0xFF).asInstanceOf[Byte],
+            ((i>> 48)&0xFF).asInstanceOf[Byte],
+            ((i>> 56)&0xFF).asInstanceOf[Byte]
+        )
+    }
+    implicit def convertByteArrayToLong(b: Array[Byte]): Long = {
+        (b(0).asInstanceOf[Long] & 0xFF)       |
+        (b(1).asInstanceOf[Long] & 0xFF) <<  8 |
+        (b(2).asInstanceOf[Long] & 0xFF) << 16 |
+        (b(3).asInstanceOf[Long] & 0xFF) << 24 |
+        (b(4).asInstanceOf[Long] & 0xFF) << 32 |
+        (b(5).asInstanceOf[Long] & 0xFF) << 40 |
+        (b(6).asInstanceOf[Long] & 0xFF) << 48 |
+        (b(7).asInstanceOf[Long] & 0xFF) << 56
+    }
+}
+
+class Conversions
+object Conversions extends Conversions with StringConversions with FixedIntConversions
+
 
 object RedisClient {
     import RedisClientTypes._
