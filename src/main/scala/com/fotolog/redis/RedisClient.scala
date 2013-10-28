@@ -1,28 +1,8 @@
 package com.fotolog.redis
 
-import java.util.concurrent.Future
+import scala.concurrent.duration.Duration
 import java.util.concurrent.TimeUnit
-
-sealed abstract class KeyType
-object KeyType {
-    def apply(s: String): KeyType = {
-        s match {
-            case "none" => None
-            case "string" => String
-            case "list" => List
-            case "set" => Set
-            case "zset" => Zset
-            case "hash" => Hash
-        }
-    }
-
-    case object None extends KeyType // key does not exist
-    case object String extends KeyType // binary String value, any seq of bytes 
-    case object List extends KeyType // contains a List value
-    case object Set extends KeyType // contains a Set value
-    case object Zset extends KeyType // contains a Sorted Set value
-    case object Hash extends KeyType // contains a Hash value
-}
+import scala.concurrent.{Future, Await}
 
 trait StringConversions {
     import RedisClientTypes._
@@ -30,8 +10,6 @@ trait StringConversions {
     implicit def convertByteArrayToString(b: BinVal): String = new String(b)
 }
 trait FixedIntConversions {
-    import RedisClientTypes._
-
     implicit def convertIntToByteArray(i: Int): Array[Byte] = {
         Array[Byte](
             ((i     )&0xFF).asInstanceOf[Byte],
@@ -86,10 +64,12 @@ object RedisClient {
         case IntegerResult(1) => true
         case IntegerResult(0) => false
     }
+
     private[redis] val okResultAsBoolean: PartialFunction[Result, Boolean] = {
         case SingleLineResult("OK") => true
         // for cases where any other val should produce an error
     }
+
     private[redis] val integerResultAsInt: PartialFunction[Result, Int] = {
         case IntegerResult(x) => x
     }
@@ -97,7 +77,7 @@ object RedisClient {
     private[redis] def bulkDataResultToOpt[T](convert: (BinVal)=>T): PartialFunction[Result, Option[T]] = {
         case BulkDataResult(data) => data match {
             case None => None
-            case Some(data) => Some(convert(data))
+            case Some(d) => Some(convert(d))
         }
     }
     
@@ -118,7 +98,7 @@ object RedisClient {
     private[redis] def multiBulkDataResultToMap[T](keys: Seq[String], convert: (BinVal)=>T): PartialFunction[Result, Map[String,T]] = {
         case BulkDataResult(data) => data match {
             case None => Map()
-            case Some(data) => Map(keys.head -> convert(data))
+            case Some(d) => Map(keys.head -> convert(d))
         }
         case MultiBulkDataResult(results) => {
             Map.empty[String, T] ++
@@ -131,6 +111,9 @@ object RedisClient {
 }
 
 class RedisClient(val r: RedisConnection) {
+
+    import scala.concurrent.ExecutionContext.Implicits.global
+
     import RedisClientTypes._
     import RedisClient.integerResultAsBoolean
     import RedisClient.integerResultAsInt
@@ -142,47 +125,56 @@ class RedisClient(val r: RedisConnection) {
     import Conversions._
     import scala.collection.{ Set => SCSet }
 
+    val timeout = Duration(1, TimeUnit.MINUTES)
     def isConnected(): Boolean = r.isOpen
     def shutdown() { r.shutdown }
     
-    def flushall = r(FlushAll()).get
+    def flushall = await{ r.send(FlushAll()) }
 
-    def ping(): Boolean = ClientFuture(r(Ping())){
+    def ping(): Boolean = await {
+      r.send(Ping()).map {
         case SingleLineResult("PONG") => true
-    }.get
+      }
+    }
     
-    def info(): Map[String,String] = ClientFuture(r(Info())){
-        case BulkDataResult(Some(data)) => {
+    def info: Map[String,String] = await {
+      r.send(Info()).map {
+        case BulkDataResult(Some(data)) =>
             val info = convertByteArrayToString(data)
             Map.empty[String,String] ++ info.split("\r\n").map{_.split(":")}.map{x=>x(0)->x(1)}
-        }
-    }.get
-    
-    def keytypeAsync(key: String): Future[KeyType] = ClientFuture(r(Type(key))){
-        case SingleLineResult(s) => KeyType(s)
+      }
     }
-    def keytype(key: String): KeyType = keytypeAsync(key).get
+    
+    def keytypeAsync(key: String): Future[KeyType] = r.send(Type(key)).map { case SingleLineResult(s) => KeyType(s) }
+    def keytype(key: String): KeyType = await(keytypeAsync(key))
 
-    def existsAsync(key: String): Future[Boolean] = ClientFuture(r(Exists(key)))(integerResultAsBoolean)
-    def exists(key: String): Boolean = existsAsync(key).get
+    def existsAsync(key: String): Future[Boolean] = r.send(Exists(key)).map(integerResultAsBoolean)
+    def exists(key: String): Boolean = await(existsAsync(key))
     def ? (key: String): Boolean = exists(key)
     
-    def setAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Set(key -> convert(value))))(okResultAsBoolean)
-    def set[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = setAsync(key, value)(convert).get
-    def setAsync[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Set(kvs.map{kv => kv._1 -> convert(kv._2)} : _*)))(okResultAsBoolean)
-    def set[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = setAsync(kvs: _*)(convert).get
-    def setAsync[T](key: String, expiration: Int, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(SetEx(key, expiration, convert(value))))(okResultAsBoolean)
-    def set[T](key: String, expiration: Int, value: T)(implicit convert: (T)=>BinVal): Boolean = setAsync(key, expiration, value)(convert).get
-    def +[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = set(key, value)(convert)
-    def +[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = set(kvs: _*)(convert)
-    def ++[T](kvs: TraversableOnce[(String,T)])(implicit convert: (T)=>BinVal): Boolean = set(kvs.toSeq: _*)(convert)
+    def setAsync[T](key: String, value: T)(implicit convert:(T)=>BinVal): Future[Boolean] =
+      r.send(Set(key -> convert(value))).map(okResultAsBoolean)
 
-    def delAsync(key: String): Future[Boolean] = ClientFuture(r(Del(key)))(integerResultAsBoolean)
-    def del(key: String): Boolean = delAsync(key).get
-    def -(key: String): Boolean = del(key)
+    def set[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = await { setAsync(key, value)(convert) }
 
-    def getAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Get(key)))(bulkDataResultToOpt(convert))
-    def getAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[Seq[Option[T]]] = ClientFuture(r(Get(keys: _*))) {
+    def setAsync[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Future[Boolean] =
+      r.send(Set(kvs.map{kv => kv._1 -> convert(kv._2)} : _*)).map(okResultAsBoolean)
+
+    def set[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = await { setAsync(kvs: _*)(convert) }
+
+    def setAsync[T](key: String, expiration: Int, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+      r.send(SetEx(key, expiration, convert(value))).map(okResultAsBoolean)
+
+    def set[T](key: String, expiration: Int, value: T)(implicit convert: (T)=>BinVal): Boolean =
+      await{ setAsync(key, expiration, value)(convert) }
+
+    def delAsync(key: String): Future[Boolean] = r.send(Del(key)).map(integerResultAsBoolean)
+    def del(key: String): Boolean = await { delAsync(key) }
+
+    def getAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+      r.send(Get(key)).map(bulkDataResultToOpt(convert))
+
+    def getAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[Seq[Option[T]]] = r.send(MGet(keys: _*)).map {
         case BulkDataResult(data) => data match {
             case None => Seq(None)
             case Some(data) => Seq(Some(convert(data)))
@@ -193,177 +185,232 @@ class RedisClient(val r: RedisConnection) {
             }
         }
     }
-    def get[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = getAsync(key)(convert).get
-    def get[T](keys: String*)(implicit convert: (BinVal)=>T): Seq[Option[T]] = getAsync(keys: _*)(convert).get
+
+    def get[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = await { getAsync(key)(convert) }
+    def get[T](keys: String*)(implicit convert: (BinVal)=>T): Seq[Option[T]] = await { getAsync(keys: _*)(convert) }
     def apply[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = get(key)(convert)
 
-    def mgetAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[Map[String,T]] = ClientFuture(r(Get(keys: _*)))(multiBulkDataResultToMap(keys,convert))
-    def mget[T](keys: String*)(implicit convert: (BinVal)=>T): Map[String,T] = mgetAsync(keys: _*)(convert).get
-    def apply[T](keys: String*)(implicit convert: (BinVal)=>T): Map[String,T] = mget(keys: _*)(convert)
-    def apply[T](keys: TraversableOnce[String])(implicit convert: (BinVal)=>T): Map[String,T] = mget(keys.toSeq: _*)(convert)
+    def mgetAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[Map[String,T]] =
+      r.send( MGet(keys: _*)).map(multiBulkDataResultToMap(keys,convert))
+
+    def mget[T](keys: String*)(implicit convert: (BinVal)=>T): Map[String,T] = await { mgetAsync(keys: _*)(convert) }
+
+    def setnxAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+      r.send(SetNx(key -> convert(value))).map(integerResultAsBoolean)
+
+    def setnxAsync[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Future[Boolean] =
+      r.send(SetNx(kvs.map{kv => kv._1 -> convert(kv._2)} : _*)).map(integerResultAsBoolean)
+
+    def setnx[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean =
+      await { setnxAsync(key, value)(convert) }
+
+    def setnx[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = await { setnxAsync(kvs: _*)(convert) }
+
+    def getsetAsync[T](key: String, value: T)(implicit convertTo: (T)=>BinVal, convertFrom: (BinVal)=>T): Future[Option[T]] =
+      r.send(GetSet(key -> convertTo(value))).map(bulkDataResultToOpt(convertFrom))
+
+    def getset[T](key: String, value: T)(implicit convertTo: (T)=>BinVal, convertFrom: (BinVal)=>T): Option[T] =
+      await { getsetAsync(key, value)(convertTo, convertFrom) }
+
+    def incrAsync[T](key: String, delta: Int = 1): Future[Int] = r.send(Incr(key, delta)).map(integerResultAsInt)
+    def incr[T](key: String, delta: Int = 1): Int = await { incrAsync(key, delta) }
+
+    def decrAsync[T](key: String, delta: Int = 1): Future[Int] = r.send(Decr(key, delta)).map(integerResultAsInt)
+    def decr[T](key: String, delta: Int = 1): Int = await { decrAsync(key, delta) }
     
-    def setnxAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(SetNx(key -> convert(value))))(integerResultAsBoolean)
-    def setnxAsync[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(SetNx(kvs.map{kv => kv._1 -> convert(kv._2)} : _*)))(integerResultAsBoolean)
-    def setnx[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = setnxAsync(key, value)(convert).get
-    def setnx[T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = setnxAsync(kvs: _*)(convert).get
-    def +? [T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = setnx(key, value)(convert)
-    def +? [T](kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = setnx(kvs: _*)(convert)
+    def appendAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Int] =
+      r.send(Append(key -> convert(value))).map(integerResultAsInt)
 
-    def getsetAsync[T](key: String, value: T)(implicit convertTo: (T)=>BinVal, convertFrom: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(GetSet(key -> convertTo(value))))(bulkDataResultToOpt(convertFrom))
-    def getset[T](key: String, value: T)(implicit convertTo: (T)=>BinVal, convertFrom: (BinVal)=>T): Option[T] = getsetAsync(key, value)(convertTo, convertFrom).get
+    def append[T](key: String, value: T)(implicit convert: (T)=>BinVal): Int = await {appendAsync(key, value)(convert) }
 
-    def incrAsync[T](key: String, delta: Int = 1): Future[Int] = ClientFuture(r(Incr(key, delta)))(integerResultAsInt)
-    def incr[T](key: String, delta: Int = 1): Int = incrAsync(key, delta).get
+    def substrAsync[T](key: String, startOffset: Int, endOffset: Int)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+      r.send(Substr(key, startOffset, endOffset)).map(bulkDataResultToOpt(convert))
 
-    def decrAsync[T](key: String, delta: Int = 1): Future[Int] = ClientFuture(r(Decr(key, delta)))(integerResultAsInt)
-    def decr[T](key: String, delta: Int = 1): Int = decrAsync(key, delta).get
+    def substr[T](key: String, startOffset: Int, endOffset: Int)(implicit convert: (BinVal)=>T): Option[T] =
+      await { substrAsync(key, startOffset, endOffset)(convert) }
     
-    def appendAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Int] = ClientFuture(r(Append(key -> convert(value))))(integerResultAsInt)
-    def append[T](key: String, value: T)(implicit convert: (T)=>BinVal): Int = appendAsync(key, value)(convert).get
+    def expireAsync(key: String, seconds: Int): Future[Boolean] = r.send(Expire(key, seconds)).map(integerResultAsBoolean)
+    def expire(key: String, seconds: Int): Boolean = await { expireAsync(key, seconds) }
 
-    def substrAsync[T](key: String, startOffset: Int, endOffset: Int)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Substr(key, startOffset, endOffset)))(bulkDataResultToOpt(convert))
-    def substr[T](key: String, startOffset: Int, endOffset: Int)(implicit convert: (BinVal)=>T): Option[T] = substrAsync(key, startOffset, endOffset)(convert).get
+    def persistAsync(key: String): Future[Boolean] = r.send(Persist(key)).map(integerResultAsBoolean)
+    def persist(key: String): Boolean = await { persistAsync(key) }
+
+    def rpushAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Int] =
+      r.send(Rpush(key, convert(value))).map(integerResultAsInt)
+
+    def rpush[T](key: String, value: T)(implicit convert: (T)=>BinVal): Int = await { rpushAsync(key, value) }
+
+    def lpushAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Int] =
+      r.send(Lpush(key, convert(value))).map(integerResultAsInt)
+
+    def lpush[T](key: String, value: T)(implicit convert: (T)=>BinVal): Int = await {  lpushAsync(key, value) }
+
+    def llenAsync[T](key: String): Future[Int] = r.send(Llen(key)).map(integerResultAsInt)
+    def llen[T](key: String): Int = await {  llenAsync(key) }
+
+    def lrangeAsync[T](key: String, start: Int, end: Int)(implicit convert: (BinVal)=>T): Future[Seq[T]] =
+      r.send(Lrange(key, start, end)).map(multiBulkDataResultToFilteredSeq(convert))
+
+    def lrange[T](key: String, start: Int, end: Int)(implicit convert: (BinVal)=>T): Seq[T] = await {  lrangeAsync(key, start, end)(convert) }
+
+    def ltrimAsync(key: String, start: Int, end: Int): Future[Boolean] =
+      r.send(Ltrim(key, start, end)).map(okResultAsBoolean)
+
+    def ltrim(key: String, start: Int, end: Int): Boolean = await { ltrimAsync(key, start, end) }
+
+    def lindexAsync[T](key: String, idx: Int)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+      r.send(Lindex(key, idx)).map(bulkDataResultToOpt(convert))
+
+    def lindex[T](key: String, idx: Int)(implicit convert: (BinVal)=>T): Option[T] = await { lindexAsync(key, idx)(convert) }
+
+    def lsetAsync[T](key: String, idx: Int, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+      r.send(Lset(key, idx, convert(value))).map(okResultAsBoolean)
+
+    def lset[T](key: String, idx: Int, value: T)(implicit convert: (T)=>BinVal): Boolean = await {  lsetAsync(key, idx, value)(convert) }
+
+    def lremAsync[T](key: String, count: Int, value: T)(implicit convert: (T)=>BinVal): Future[Int] =
+      r.send(Lrem(key, count, convert(value))).map(integerResultAsInt)
+
+    def lrem[T](key: String, count: Int, value: T)(implicit convert: (T)=>BinVal): Int = await {  lremAsync(key, count, value)(convert) }
+
+    def lpopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = r.send(Lpop(key)).map(bulkDataResultToOpt(convert))
+    def lpop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = await {  lpopAsync(key)(convert) }
+
+    def rpopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = r.send(Rpop(key)).map(bulkDataResultToOpt(convert))
+    def rpop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = await { rpopAsync(key)(convert) }
+
+    def rpoplpushAsync[T](srcKey: String, destKey: String)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+      r.send(RpopLpush(srcKey, destKey)).map(bulkDataResultToOpt(convert))
+
+    def rpoplpush[T](srcKey: String, destKey: String)(implicit convert: (BinVal)=>T): Option[T] = await { rpoplpushAsync(srcKey, destKey)(convert) }
+
+    def hsetAsync[T](key: String, field: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+      r.send(Hset(key, field, convert(value))).map(integerResultAsBoolean)
+
+    def hset[T](key: String, field: String, value: T)(implicit convert: (T)=>BinVal): Boolean = await { hsetAsync(key, field, value)(convert) }
+
+    def hgetAsync[T](key: String, field: String)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+      r.send(Hget(key, field)).map(bulkDataResultToOpt(convert))
+
+  def hget[T](key: String, field: String)(implicit convert: (BinVal)=>T): Option[T] = await { hgetAsync(key, field)(convert) }
+
+  def hmgetAsync[T](key: String, fields: String*)(implicit convert: (BinVal)=>T): Future[Map[String,T]] =
+    r.send(Hmget(key, fields: _*)).map(multiBulkDataResultToMap(fields, convert))
+
+  def hmget[T](key: String, fields: String*)(implicit convert: (BinVal)=>T): Map[String,T] =
+    await { hmgetAsync(key, fields: _*)(convert) }
+
+  def hmsetAsync[T](key: String, kvs: (String,T)*)(implicit convert: (T)=>BinVal): Future[Boolean] =
+    r.send(Hmset(key, kvs.map{kv => kv._1 -> convert(kv._2)} : _*)).map(okResultAsBoolean)
+
+  def hmset[T](key: String, kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = await { hmsetAsync(key, kvs: _*)(convert) }
+
+  def hincrAsync(key: String, field: String, delta: Int = 1): Future[Int] =
+    r.send(Hincrby(key, field, delta)).map(integerResultAsInt)
+
+  def hincr(key: String, field: String, delta: Int = 1): Int = await { hincrAsync(key, field, delta) }
+
+  def hexistsAsync(key: String, field: String): Future[Boolean] = r.send(Hexists(key, field)).map(integerResultAsBoolean)
+  def hexists(key: String, field: String): Boolean = await { hexistsAsync(key, field) }
+
+  def hdelAsync(key: String, field: String): Future[Boolean] = r.send(Hdel(key, field)).map(integerResultAsBoolean)
+  def hdel(key: String, field: String): Boolean = await { hdelAsync(key, field) }
+
+  def hlenAsync(key: String): Future[Int] = r.send(Hlen(key)).map(integerResultAsInt)
+  def hlen(key: String): Int = await { hlenAsync(key) }
+
+  def hkeysAsync(key: String): Future[Seq[String]] =
+    r.send(Hkeys(key)).map(multiBulkDataResultToFilteredSeq(convertByteArrayToString))
+
+  def hkeys(key: String): Seq[String] = await { hkeysAsync(key) }
+
+  def hvalsAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Seq[T]] =
+    r.send(Hvals(key)).map(multiBulkDataResultToFilteredSeq(convert))
+
+  def hvals[T](key: String)(implicit convert: (BinVal)=>T): Seq[T] = await { hvalsAsync(key)(convert) }
     
-    def expireAsync(key: String, seconds: Int): Future[Boolean] = ClientFuture(r(Expire(key, seconds)))(integerResultAsBoolean)
-    def expire(key: String, seconds: Int): Boolean = expireAsync(key, seconds).get
+  def hgetallAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Map[String,T]] = r.send(Hgetall(key)).map {
+      case MultiBulkDataResult(List()) => Map.empty[String,T]
+      case MultiBulkDataResult(results) => Map.empty[String, T] ++ {
+          var take = false
+          results.zip(results.tail).filter{ (_) => take = !take; take }.filter{ kv => kv match {
+              case (k, BulkDataResult(Some(_))) => true
+              case (k, BulkDataResult(None)) => false
+          }}.map{ kv => convertByteArrayToString(kv._1.data.get) -> convert(kv._2.data.get)}
+      }
+  }
 
-    def persistAsync(key: String): Future[Boolean] = ClientFuture(r(Persist(key)))(integerResultAsBoolean)
-    def persist(key: String): Boolean = persistAsync(key).get
+  def hgetall[T](key: String)(implicit convert: (BinVal)=>T): Map[String,T] = await { hgetallAsync(key)(convert) }
 
-    def rpushAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Int] =  ClientFuture(r(Rpush(key, convert(value))))(integerResultAsInt)
-    def rpush[T](key: String, value: T)(implicit convert: (T)=>BinVal): Int = rpushAsync(key, value).get
+  def saddAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+    r.send(Sadd(key->convert(value))).map(integerResultAsBoolean)
 
-    def lpushAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Int] = ClientFuture(r(Lpush(key, convert(value))))(integerResultAsInt)
-    def lpush[T](key: String, value: T)(implicit convert: (T)=>BinVal): Int = lpushAsync(key, value).get
+  def sadd[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = await { saddAsync(key,value)(convert) }
 
-    def llenAsync[T](key: String): Future[Int] =  ClientFuture(r(Llen(key)))(integerResultAsInt)
-    def llen[T](key: String): Int = llenAsync(key).get  
+  def sremAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+    r.send(Srem(key->convert(value))).map(integerResultAsBoolean)
 
-    def lrangeAsync[T](key: String, start: Int, end: Int)(implicit convert: (BinVal)=>T): Future[Seq[T]] = ClientFuture(r(Lrange(key, start, end)))(multiBulkDataResultToFilteredSeq(convert))
-    def lrange[T](key: String, start: Int, end: Int)(implicit convert: (BinVal)=>T): Seq[T] = lrangeAsync(key, start, end)(convert).get
+  def srem[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = await { sremAsync(key,value)(convert) }
 
-    def ltrimAsync(key: String, start: Int, end: Int): Future[Boolean] = ClientFuture(r(Ltrim(key, start, end)))(okResultAsBoolean)
-    def ltrim(key: String, start: Int, end: Int): Boolean = ltrimAsync(key, start, end).get
+  def spopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+    r.send(Spop(key)).map(bulkDataResultToOpt(convert))
 
-    def lindexAsync[T](key: String, idx: Int)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Lindex(key, idx)))(bulkDataResultToOpt(convert))        
-    def lindex[T](key: String, idx: Int)(implicit convert: (BinVal)=>T): Option[T] = lindexAsync(key, idx)(convert).get
+  def spop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = await { spopAsync(key)(convert) }
 
-    def lsetAsync[T](key: String, idx: Int, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Lset(key, idx, convert(value))))(okResultAsBoolean)
-    def lset[T](key: String, idx: Int, value: T)(implicit convert: (T)=>BinVal): Boolean = lsetAsync(key, idx, value)(convert).get
+  def smoveAsync[T](srcKey: String, destKey: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+    r.send(Smove(srcKey, destKey, convert(value))).map(integerResultAsBoolean)
 
-    def lremAsync[T](key: String, count: Int, value: T)(implicit convert: (T)=>BinVal): Future[Int] = ClientFuture(r(Lrem(key, count, convert(value))))(integerResultAsInt)
-    def lrem[T](key: String, count: Int, value: T)(implicit convert: (T)=>BinVal): Int = lremAsync(key, count, value)(convert).get
+  def smove[T](srcKey: String, destKey: String, value: T)(implicit convert: (T)=>BinVal): Boolean =
+    await { smoveAsync(srcKey, destKey, value)(convert) }
 
-    def lpopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Lpop(key)))(bulkDataResultToOpt(convert))        
-    def lpop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = lpopAsync(key)(convert).get
+  def scardAsync(key: String): Future[Int] = r.send(Scard(key)).map(integerResultAsInt)
+  def scard(key: String): Int = await { scardAsync(key) }
 
-    def rpopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Rpop(key)))(bulkDataResultToOpt(convert))        
-    def rpop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = rpopAsync(key)(convert).get
+  def sismemberAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] =
+    r.send(Sismember(key->convert(value))).map(integerResultAsBoolean)
 
-    def rpoplpushAsync[T](srcKey: String, destKey: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(RpopLpush(srcKey, destKey)))(bulkDataResultToOpt(convert))
-    def rpoplpush[T](srcKey: String, destKey: String)(implicit convert: (BinVal)=>T): Option[T] = rpoplpushAsync(srcKey, destKey)(convert).get
+  def sismember[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean =
+    await { sismemberAsync(key, value)(convert) }
 
-    def hsetAsync[T](key: String, field: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Hset(key, field, convert(value))))(integerResultAsBoolean)
-    def hset[T](key: String, field: String, value: T)(implicit convert: (T)=>BinVal): Boolean = hsetAsync(key, field, value)(convert).get
+  def sinterAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] =
+    r.send(Sinter(keys: _*)).map(multiBulkDataResultToSet(convert))
 
-    def hgetAsync[T](key: String, field: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Hget(key, field)))(bulkDataResultToOpt(convert))
-    def hget[T](key: String, field: String)(implicit convert: (BinVal)=>T): Option[T] = hgetAsync(key, field)(convert).get
+  def sinter[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = await { sinterAsync(keys: _*)(convert) }
 
-    def hmgetAsync[T](key: String, fields: String*)(implicit convert: (BinVal)=>T): Future[Map[String,T]] = ClientFuture(r(Hmget(key, fields: _*)))(multiBulkDataResultToMap(fields, convert))
-    def hmget[T](key: String, fields: String*)(implicit convert: (BinVal)=>T): Map[String,T] = hmgetAsync(key, fields: _*)(convert).get 
+  def sinterstoreAsync[T](destKey: String, keys: String*): Future[Int] =
+    r.send(Sinterstore(destKey, keys: _*)).map(integerResultAsInt)
 
-    def hmsetAsync[T](key: String, kvs: (String,T)*)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Hmset(key, kvs.map{kv => kv._1 -> convert(kv._2)} : _*)))(okResultAsBoolean)
-    def hmset[T](key: String, kvs: (String,T)*)(implicit convert: (T)=>BinVal): Boolean = hmsetAsync(key, kvs: _*)(convert).get
+  def sinterstore[T](destKey: String, keys: String*): Int = await { sinterstoreAsync(destKey, keys: _*) }
 
-    def hincrAsync(key: String, field: String, delta: Int = 1): Future[Int] = ClientFuture(r(Hincrby(key, field, delta)))(integerResultAsInt)
-    def hincr(key: String, field: String, delta: Int = 1): Int = hincrAsync(key, field, delta).get
+  def sunionAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] =
+    r.send(Sunion(keys: _*)).map(multiBulkDataResultToSet(convert))
 
-    def hexistsAsync(key: String, field: String): Future[Boolean] = ClientFuture(r(Hexists(key, field)))(integerResultAsBoolean)
-    def hexists(key: String, field: String): Boolean = hexistsAsync(key, field).get
+  def sunion[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = await { sunionAsync(keys: _*)(convert) }
 
-    def hdelAsync(key: String, field: String): Future[Boolean] = ClientFuture(r(Hdel(key, field)))(integerResultAsBoolean)
-    def hdel(key: String, field: String): Boolean = hdelAsync(key, field).get
+  def sunionstoreAsync[T](destKey: String, keys: String*): Future[Int] =
+    r.send(Sunionstore(destKey, keys: _*)).map(integerResultAsInt)
 
-    def hlenAsync(key: String): Future[Int] = ClientFuture(r(Hlen(key)))(integerResultAsInt)
-    def hlen(key: String): Int = hlenAsync(key).get
+  def sunionstore[T](destKey: String, keys: String*): Int = await { sunionstoreAsync(destKey, keys: _*) }
 
-    def hkeysAsync(key: String): Future[Seq[String]] = ClientFuture(r(Hkeys(key)))(multiBulkDataResultToFilteredSeq(convertByteArrayToString))
-    def hkeys(key: String): Seq[String] = hkeysAsync(key).get
+  def sdiffAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] =
+    r.send(Sdiff(keys: _*)).map(multiBulkDataResultToSet(convert))
 
-    def hvalsAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Seq[T]] = ClientFuture(r(Hvals(key)))(multiBulkDataResultToFilteredSeq(convert))
-    def hvals[T](key: String)(implicit convert: (BinVal)=>T): Seq[T] = hvalsAsync(key)(convert).get
-    
-    def hgetallAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Map[String,T]] = ClientFuture(r(Hgetall(key))) {
-        case MultiBulkDataResult(List()) => Map.empty[String,T]
-        case MultiBulkDataResult(results) => Map.empty[String, T] ++ {
-            var take = false
-            results.zip(results.tail).filter{ (_) => take = !take; take }.filter{ kv => kv match {
-                case (k, BulkDataResult(Some(_))) => true
-                case (k, BulkDataResult(None)) => false
-            }}.map{ kv => convertByteArrayToString(kv._1.data.get) -> convert(kv._2.data.get)}
-        }
-    }
-    def hgetall[T](key: String)(implicit convert: (BinVal)=>T): Map[String,T] = hgetallAsync(key)(convert).get
+  def sdiff[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = await { sdiffAsync(keys: _*)(convert) }
 
-    def saddAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Sadd(key->convert(value))))(integerResultAsBoolean)
-    def sadd[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = saddAsync(key,value)(convert).get
+  def sdiffstoreAsync[T](destKey: String, keys: String*): Future[Int] =
+    r.send(Sdiffstore(destKey, keys: _*)).map(integerResultAsInt)
 
-    def sremAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Srem(key->convert(value))))(integerResultAsBoolean)
-    def srem[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = sremAsync(key,value)(convert).get
+  def sdiffstore[T](destKey: String, keys: String*): Int = await { sdiffstoreAsync(destKey, keys: _*) }
 
-    def spopAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Spop(key)))(bulkDataResultToOpt(convert))
-    def spop[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = spopAsync(key)(convert).get
+  def smembersAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[SCSet[T]] =
+    r.send(Smembers(key)).map(multiBulkDataResultToSet(convert))
 
-    def smoveAsync[T](srcKey: String, destKey: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Smove(srcKey, destKey, convert(value))))(integerResultAsBoolean)
-    def smove[T](srcKey: String, destKey: String, value: T)(implicit convert: (T)=>BinVal): Boolean = smoveAsync(srcKey, destKey, value)(convert).get
+  def smembers[T](key: String)(implicit convert: (BinVal)=>T): SCSet[T] = await { smembersAsync(key)(convert) }
 
-    def scardAsync(key: String): Future[Int] = ClientFuture(r(Scard(key)))(integerResultAsInt)
-    def scard(key: String): Int = scardAsync(key).get
+  def srandmemberAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] =
+    r.send(Srandmember(key)).map(bulkDataResultToOpt(convert))
 
-    def sismemberAsync[T](key: String, value: T)(implicit convert: (T)=>BinVal): Future[Boolean] = ClientFuture(r(Sismember(key->convert(value))))(integerResultAsBoolean)
-    def sismember[T](key: String, value: T)(implicit convert: (T)=>BinVal): Boolean = sismemberAsync(key, value)(convert).get
+  def srandmember[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = await { srandmemberAsync(key)(convert) }
 
-    def sinterAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sinter(keys: _*)))(multiBulkDataResultToSet(convert))
-    def sinter[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sinterAsync(keys: _*)(convert).get
-
-    def sinterstoreAsync[T](destKey: String, keys: String*): Future[Int] = ClientFuture(r(Sinterstore(destKey, keys: _*)))(integerResultAsInt)
-    def sinterstore[T](destKey: String, keys: String*): Int = sinterstoreAsync(destKey, keys: _*).get
-
-    def sunionAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sunion(keys: _*)))(multiBulkDataResultToSet(convert))
-    def sunion[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sunionAsync(keys: _*)(convert).get
-
-    def sunionstoreAsync[T](destKey: String, keys: String*): Future[Int] = ClientFuture(r(Sunionstore(destKey, keys: _*)))(integerResultAsInt)
-    def sunionstore[T](destKey: String, keys: String*): Int = sunionstoreAsync(destKey, keys: _*).get
-
-    def sdiffAsync[T](keys: String*)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Sdiff(keys: _*)))(multiBulkDataResultToSet(convert))
-    def sdiff[T](keys: String*)(implicit convert: (BinVal)=>T): SCSet[T] = sdiffAsync(keys: _*)(convert).get
-
-    def sdiffstoreAsync[T](destKey: String, keys: String*): Future[Int] = ClientFuture(r(Sdiffstore(destKey, keys: _*)))(integerResultAsInt)
-    def sdiffstore[T](destKey: String, keys: String*): Int = sdiffstoreAsync(destKey, keys: _*).get
-
-    def smembersAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[SCSet[T]] = ClientFuture(r(Smembers(key)))(multiBulkDataResultToSet(convert))
-    def smembers[T](key: String)(implicit convert: (BinVal)=>T): SCSet[T] = smembersAsync(key)(convert).get
-
-    def srandmemberAsync[T](key: String)(implicit convert: (BinVal)=>T): Future[Option[T]] = ClientFuture(r(Srandmember(key)))(bulkDataResultToOpt(convert))
-    def srandmember[T](key: String)(implicit convert: (BinVal)=>T): Option[T] = srandmemberAsync(key)(convert).get
+  def await[T](f: Future[T]) = Await.result[T](f, timeout)
 }
-
-object ClientFuture {
-    def apply[T](redisResult: ResultFuture)(resultConverter: PartialFunction[Result, T]) = new ClientFuture(redisResult, resultConverter)
-}
-
-class ClientFuture[T](redisResult: ResultFuture, resultConverter: PartialFunction[Result, T]) extends Future[T] {
-    override def get(): T = get(10, TimeUnit.SECONDS)
-    override def isCancelled(): Boolean = redisResult.isCancelled
-    override def cancel(p: Boolean): Boolean = redisResult.cancel(p)
-    override def isDone(): Boolean = redisResult.isDone
-    override def get(t: Long, unit: TimeUnit): T = {
-        val rr = redisResult.get(t, unit)
-        rr match {
-            case ErrorResult(err) => throw new RedisClientException(err)
-            case x => resultConverter(x)
-        }
-    }
-}
-
-class RedisClientException(msg: String) extends RuntimeException(msg)

@@ -7,7 +7,7 @@ import Assert._
 import Conversions._
 
 class RedisClientTest extends TestCase {
-    val c = RedisClient("localhost", 6380) // non-default port, just in case as this wipes out all data
+    val c = RedisClient("localhost", 6379) // non-default port, just in case as this wipes out all data
 
     override def setUp() = super.setUp; c.flushall
     override def tearDown() = c.flushall
@@ -65,6 +65,8 @@ class RedisClientTest extends TestCase {
     }
     
     def testSubstr() {
+        println(c.get("foo"))
+        val substr = c.substr("foo", 0, 1)
         assertEquals(None, c.substr("foo", 0, 1))
         assertTrue(c.set("foo", "bar"))
         assertEquals(Some("ba"), c.substr[String]("foo", 0, 1))
