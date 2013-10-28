@@ -28,7 +28,8 @@ case class Type(key: String) extends Cmd
 case class Del(key: String*) extends Cmd
 case class Get(key: String) extends Cmd
 case class MGet(key: String*) extends Cmd
-case class Set(kvs: KV*) extends Cmd
+case class Set(key: String, v: BinVal) extends Cmd
+case class MSet(kvs: KV*) extends Cmd
 case class SetNx(kvs: KV*) extends Cmd
 case class GetSet(kv: KV) extends Cmd
 case class SetEx(key: String, expTime: Int, value: BinVal) extends Cmd
@@ -88,7 +89,7 @@ case class ErrorResult(err: String) extends Result
 case class SingleLineResult(msg: String) extends Result
 case class IntegerResult(n: Int) extends Result
 case class BulkDataResult(data: Option[BinVal]) extends Result {
-    override def toString(): String = {
+    override def toString = {
         "BulkDataResult(%s)".format({ data match { case Some(barr) => new String(barr); case None => "" } })
     }
 }
@@ -121,7 +122,7 @@ object RedisConnection {
           f.promise.failure(new IllegalStateException("Channel closed"))
         }
       } catch {
-        case e: Exception => f.promise.failure(e); conn.shutdown
+        case e: Exception => f.promise.failure(e); conn.shutdown()
       }
     }
   }
@@ -133,7 +134,7 @@ class RedisConnection(val host: String = "localhost", val port: Int = 6379) {
 
   private[RedisConnection] var isRunning = true
   private[RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
-  private[RedisConnection] val opQueue = new OpQueue(256) // 128
+  private[RedisConnection] val opQueue = new OpQueue(128)
 
   clientBootstrap.setPipelineFactory(new ChannelPipelineFactory() {
       override def getPipeline = {
@@ -174,21 +175,22 @@ class RedisConnection(val host: String = "localhost", val port: Int = 6379) {
     channel.write(f).addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
   }
 
-    def isOpen(): Boolean = isRunning && channel.isOpen
-    
-    def shutdown(): Unit = try {
-        isRunning = false
-        channel.close().await(1, TimeUnit.MINUTES)
-    } catch {
-        case e: Exception => log.error(e.getMessage, e) 
-    }
-    
+  def isOpen: Boolean = isRunning && channel.isOpen
 
-    private def forceChannelOpen() {
-        val f = new ResultFuture(Ping())
-        enqueue(f)
-        Await.result(f.future, Duration(1, TimeUnit.MINUTES))
+  def shutdown() {
+    try {
+      isRunning = false
+      channel.close().await(1, TimeUnit.MINUTES)
+    } catch {
+      case e: Exception => log.error(e.getMessage, e)
     }
+  }
+
+  private def forceChannelOpen() {
+    val f = new ResultFuture(Ping())
+    enqueue(f)
+    Await.result(f.future, Duration(1, TimeUnit.MINUTES))
+  }
 }
 
 
@@ -298,8 +300,8 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
         case Del(keys @ _*) => multiKeyCmd(DEL, keys)
         case Get(key) => copiedBuffer(GET, SPACE, key.getBytes, EOL)
         case MGet(keys @ _*) => multiKeyCmd(MGET, keys)
-        case Set((key, value)) => binaryCmd(SET, key.getBytes, value)
-        case setMulti: Set => binarySetCmd(MSET, setMulti.kvs: _*)
+        case Set(key, value) => binaryCmd(SET, key.getBytes, value)
+        case mset: MSet => binarySetCmd(MSET, mset.kvs :_*)
         case GetSet((key, value)) => binaryCmd(GETSET, key.getBytes, value)
         case SetNx((key, value)) => binaryCmd(SETNX, key.getBytes, value)
         case setNxMulti: SetNx => binarySetCmd(MSETNX, setNxMulti.kvs: _*)
