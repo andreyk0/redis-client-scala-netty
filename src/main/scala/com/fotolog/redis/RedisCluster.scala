@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 case class RedisHost(host: String, port: Int)
 
 class RedisCluster[Shard](hash: (Shard)=>Int, hosts: RedisHost*) {
-    val h2cRef = new AtomicReference[Map[RedisHost,RedisClient]](Map.empty)
+    val h2cRef = new AtomicReference[Map[RedisHost, RedisClient]](Map.empty)
     
     def apply(s: Shard): RedisClient = {
         val h = hosts(hash(s).abs % hosts.length)
