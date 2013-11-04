@@ -7,7 +7,6 @@ import org.jboss.netty.buffer._
 import org.jboss.netty.bootstrap.ClientBootstrap
 import org.jboss.netty.handler.codec.frame.FrameDecoder
 import java.net.InetSocketAddress
-import org.apache.log4j.Logger
 import scala.concurrent.{Await, Future, Promise}
 import java.util.concurrent.{TimeUnit, Executors, ArrayBlockingQueue}
 import scala.concurrent.duration.Duration
@@ -37,7 +36,6 @@ case class ResultFuture(cmd: Cmd) {
 object RedisConnection {
   private[redis] type OpQueue = ArrayBlockingQueue[ResultFuture]
 
-  private[redis] val log = Logger.getLogger(getClass)
   private[redis] val executor = Executors.newCachedThreadPool()
   private[redis] val channelFactory = new NioClientSocketChannelFactory(executor, executor)
   private[redis] val commandEncoder = new RedisCommandEncoder() // stateless
@@ -50,8 +48,7 @@ object RedisConnection {
         if (conn.isOpen) {
           conn.enqueue(f)
         } else {
-          log.error("Skipping cmd queued up into a closed channel (%s)".format(f.cmd))
-          f.promise.failure(new IllegalStateException("Channel closed"))
+          f.promise.failure(new IllegalStateException("Channel closed, command: " + f.cmd))
         }
       } catch {
         case e: Exception => f.promise.failure(e); conn.shutdown()
@@ -92,9 +89,7 @@ class RedisConnection(val host: String = "localhost", val port: Int = 6379) {
       }
   }
 
-  log.info("Connecting to %s:%s".format(host,port))
   forceChannelOpen()
-
 
   def send(cmd: Cmd): Future[Result] = {
     val f = new ResultFuture(cmd)
@@ -110,12 +105,8 @@ class RedisConnection(val host: String = "localhost", val port: Int = 6379) {
   def isOpen: Boolean = isRunning && channel.isOpen
 
   def shutdown() {
-    try {
-      isRunning = false
-      channel.close().await(1, TimeUnit.MINUTES)
-    } catch {
-      case e: Exception => log.error(e.getMessage, e)
-    }
+    isRunning = false
+    channel.close().await(1, TimeUnit.MINUTES)
   }
 
   private def forceChannelOpen() {
@@ -303,7 +294,6 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
 
 private[redis] trait ChannelExceptionHandler {
   def handleException(ctx: ChannelHandlerContext, e: ExceptionEvent) {
-    RedisConnection.log.error(e.getCause.getMessage, e.getCause)
     e.getChannel.close() // don't allow any more ops on this channel, pipeline is busted
   }
 }
