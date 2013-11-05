@@ -176,6 +176,10 @@ private[redis] object RedisCommandEncoder {
   val SMEMBERS = "SMEMBERS".getBytes
   val SRANDMEMBER = "SRANDMEMBER".getBytes
   val SORT = "SORT".getBytes
+
+  val EVAL = "EVAL".getBytes
+  val EVALSHA = "EVALSHA".getBytes
+
   val PING = "PING".getBytes
   val EXISTS = "EXISTS".getBytes
   val TYPE = "TYPE".getBytes
@@ -249,6 +253,10 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
     case Sdiffstore(destKey, keys @ _*) => binaryCmd(SDIFFSTORE :: destKey.getBytes :: keys.toList.map{_.getBytes}: _*)
     case Smembers(key) => copiedBuffer(SMEMBERS, SPACE, key.getBytes, EOL)
     case Srandmember(key) => copiedBuffer(SRANDMEMBER, SPACE, key.getBytes, EOL)
+
+    case eval: Eval => binaryCmd(EVAL :: eval.script.getBytes :: eval.kv.toList.map{kv => List(kv._1.getBytes, kv._2)}.flatten: _*)
+    case evalsha: EvalSha => binaryCmd(EVAL :: evalsha.digest.getBytes :: evalsha.kv.toList.map{kv => List(kv._1.getBytes, kv._2)}.flatten: _*)
+
     case Ping() => copiedBuffer(PING, EOL)
     case Exists(key) => copiedBuffer(EXISTS, SPACE, key.getBytes, EOL)
     case Type(key) => copiedBuffer(TYPE, SPACE, key.getBytes, EOL)
@@ -259,12 +267,12 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
   private def multiKeyCmd(cmd: BinVal, keys: Seq[String]): ChannelBuffer = {
     val params = new Array[BinVal](2*keys.length + 2)
     params(0) = cmd
-    var i=1
+    var i = 1
     for(k <- keys) {
         params(i) = SPACE       ; i = i+1
         params(i) = k.getBytes  ; i = i+1
     }
-    params(params.length-1) = EOL
+    params(params.length - 1) = EOL
     copiedBuffer(params: _*)
   }
 
@@ -412,9 +420,11 @@ private[redis] class RedisResponseAccumulator(opQueue: RedisConnection.OpQueue) 
     val chunk = bulkData match {
       case null => BULK_NONE
       case buf => {
-        val bytes = new BinVal(buf.readableBytes())
-        buf.readBytes(bytes)
-        BulkDataResult(Some(bytes))
+        if(buf.readable) {
+          val bytes = new BinVal(buf.readableBytes())
+          buf.readBytes(bytes)
+          BulkDataResult(Some(bytes))
+        } else BulkDataResult(None)
       }
     }
 

@@ -11,51 +11,6 @@ class RedisClientTest extends TestCase {
     override def setUp() = super.setUp; c.flushall
     override def tearDown() = c.flushall
 
-
-    def testAll() {
-      val s = System.currentTimeMillis()
-
-      for(i <- 1 to 100000) {
-        c.set("key" + i, "value" + i)
-      }
-
-      val newtime = System.currentTimeMillis()
-      val dt = newtime - s
-
-      println("Set time: " + dt)
-
-      for(i <- 1 to 100000) {
-        c.del("key" + i)
-      }
-
-      println("Del time: " + (System.currentTimeMillis() - newtime))
-    }
-
-    /*def testAsyncAll() {
-      val s = System.currentTimeMillis()
-
-      for(i <- 1 to 100000) {
-        c.setAsync("key" + i, "value" + i)
-      }
-
-      val newtime = System.currentTimeMillis()
-      val dt = newtime - s
-
-      println("Set time: " + dt)
-
-      for(i <- 1 to 100000) {
-        c.delAsync("key" + i)
-      }
-
-      println("Del time: " + (System.currentTimeMillis() - newtime))
-
-
-      val fltime = System.currentTimeMillis()
-      c.flushall
-
-      println("Flush time: " + (System.currentTimeMillis() - fltime))
-    }*/
-
     def testPingGetSetExistsType() {
         assertTrue(c.ping)
         assertFalse(c.exists("foo"))
@@ -109,9 +64,7 @@ class RedisClientTest extends TestCase {
     }
     
     def testSubstr() {
-        println(c.get[String]("foo"))
-        val substr = c.substr[String]("foo", 0, 1)
-        // assertEquals(None, c.substr[String]("foo", 0, 1))
+        assertEquals(None, c.substr[String]("foo", 0, 1))
         assertTrue(c.set("foo", "bar"))
         assertEquals(Some("ba"), c.substr[String]("foo", 0, 1))
     }
@@ -119,7 +72,7 @@ class RedisClientTest extends TestCase {
     def testExpirePersist() {
         assertTrue(c.set("foo", "bar"))
         assertTrue(c.expire("foo", 100))
-        //assertTrue(c.persist("foo")) // depends on the version of redis
+        assertTrue(c.persist("foo")) // depends on the version of redis
     }
 
     def testLists() {
@@ -224,6 +177,10 @@ class RedisClientTest extends TestCase {
         assertEquals(SCSet("baz"), c.smembers[String]("setX"))
 
         assertTrue(SCSet("foo", "bar", "baz").contains(c.srandmember[String]("set1").get))
+    }
+
+    def testEval() {
+      assertEquals(1, c.eval[Int]("return ARGS[1]", ("first", "1")).head)
     }
 
 
