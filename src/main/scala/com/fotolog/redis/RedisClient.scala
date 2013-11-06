@@ -5,55 +5,63 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.{Future, Await}
 
 object RedisClient {
-    import scala.collection.{ Set => SCSet }
+  import scala.collection.{ Set => SCSet }
 
-    def apply(): RedisClient = new RedisClient(new RedisConnection)
-    def apply(host: String, port: Int = 6379) = new RedisClient(new RedisConnection(host, port))
+  def apply(): RedisClient = new RedisClient(new RedisConnection)
+  def apply(host: String, port: Int = 6379) = new RedisClient(new RedisConnection(host, port))
 
-    private[redis] val integerResultAsBoolean: PartialFunction[Result, Boolean] = {
-        case IntegerResult(1) => true
-        case IntegerResult(0) => false
-    }
+  private[redis] val integerResultAsBoolean: PartialFunction[Result, Boolean] = {
+    case BulkDataResult(Some(v)) => BinaryConverter.IntConverter.read(v) > 0
+    case BulkDataResult(None) => throw new RuntimeException("Unknown integer type")
+  }
 
-    private[redis] val okResultAsBoolean: PartialFunction[Result, Boolean] = {
-        case SingleLineResult("OK") => true
-        // for cases where any other val should produce an error
-    }
+  private[redis] val okResultAsBoolean: PartialFunction[Result, Boolean] = {
+    case SingleLineResult("OK") => true
+    // for cases where any other val should produce an error
+  }
 
-    private[redis] val integerResultAsInt: PartialFunction[Result, Int] = {
-        case IntegerResult(x) => x
-    }
-    
-    private[redis] def bulkDataResultToOpt[T](convert: BinaryConverter[T]): PartialFunction[Result, Option[T]] = {
-        case BulkDataResult(data) => data.map(convert.read)
-    }
-    
-    private[redis] def multiBulkDataResultToFilteredSeq[T](conv: BinaryConverter[T]): PartialFunction[Result, Seq[T]] = {
-        case MultiBulkDataResult(results) => results.filter {
-          case BulkDataResult(Some(_)) => true
-          case BulkDataResult(None) => false
-        }.map{ r => conv.read(r.data.get)}
-    }
+  private[redis] val integerResultAsInt: PartialFunction[Result, Int] = {
+    case BulkDataResult(Some(v)) => BinaryConverter.IntConverter.read(v)
+  }
 
-    private[redis] def multiBulkDataResultToSet[T](conv: BinaryConverter[T]): PartialFunction[Result, SCSet[T]] = {
-        case MultiBulkDataResult(results) => results.filter {
-          case BulkDataResult(Some(_)) => true
-          case BulkDataResult(None) => false
-        }.map{ r => conv.read(r.data.get)}.toSet
-    }
+  private[redis] def bulkDataResultToOpt[T](convert: BinaryConverter[T]): PartialFunction[Result, Option[T]] = {
+    case BulkDataResult(data) => data.map(convert.read)
+  }
 
-    private[redis] def multiBulkDataResultToMap[T](keys: Seq[String], conv: BinaryConverter[T]): PartialFunction[Result, Map[String,T]] = {
-        case BulkDataResult(data) => data match {
-            case None => Map()
-            case Some(d) => Map(keys.head -> conv.read(d))
-        }
-        case MultiBulkDataResult(results) => {
-            keys.zip(results).filter {
-              case (k, BulkDataResult(Some(_))) => true
-              case (k, BulkDataResult(None)) => false
-            }.map { kv => kv._1 -> conv.read(kv._2.data.get) }.toMap
-        }
+  private[redis] def multiBulkDataResultToFilteredSeq[T](conv: BinaryConverter[T]): PartialFunction[Result, Seq[T]] = {
+    case MultiBulkDataResult(results) => results.filter {
+      case BulkDataResult(Some(_)) => true
+      case BulkDataResult(None) => false
+    }.map{ r => conv.read(r.data.get)}
+  }
+
+  private[redis] def multiBulkDataResultToSet[T](conv: BinaryConverter[T]): PartialFunction[Result, SCSet[T]] = {
+    case MultiBulkDataResult(results) => results.filter {
+      case BulkDataResult(Some(_)) => true
+      case BulkDataResult(None) => false
+    }.map{ r => conv.read(r.data.get)}.toSet
+  }
+
+  private[redis] def multiBulkDataResultToMap[T](keys: Seq[String], conv: BinaryConverter[T]): PartialFunction[Result, Map[String,T]] = {
+    case BulkDataResult(data) => data match {
+      case None => Map()
+      case Some(d) => Map(keys.head -> conv.read(d))
     }
+    case MultiBulkDataResult(results) => {
+      keys.zip(results).filter {
+        case (k, BulkDataResult(Some(_))) => true
+        case (k, BulkDataResult(None)) => false
+      }.map { kv => kv._1 -> conv.read(kv._2.data.get) }.toMap
+    }
+  }
+
+  private[redis] def bulkResultToSet[T](conv: BinaryConverter[T]): PartialFunction[Result, SCSet[T]] = {
+    case MultiBulkDataResult(results) => results.filter {
+      case BulkDataResult(Some(_)) => true
+      case BulkDataResult(None) => false
+    }.map{ r => conv.read(r.data.get)}.toSet
+    case BulkDataResult(Some(v)) => SCSet(conv.read(v))
+  }
 }
 
 class RedisClient(val r: RedisConnection) {
@@ -68,6 +76,8 @@ class RedisClient(val r: RedisConnection) {
   import RedisClient.multiBulkDataResultToFilteredSeq
   import RedisClient.multiBulkDataResultToSet
   import RedisClient.multiBulkDataResultToMap
+  import RedisClient.bulkResultToSet
+
   import scala.collection.{ Set => SCSet }
 
   private[this] final val timeout = Duration(1, TimeUnit.MINUTES)
@@ -357,12 +367,12 @@ class RedisClient(val r: RedisConnection) {
   def srandmember[T](key: String)(implicit conv: BinaryConverter[T]): Option[T] = await { srandmemberAsync(key)(conv) }
 
   def evalAsync[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) =
-    r.send(Eval(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(multiBulkDataResultToSet(conv))
+    r.send(Eval(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(bulkResultToSet(conv))
 
   def eval[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) = await { evalAsync(script, kvs: _*) }
 
   def evalshaAsync[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) =
-    r.send(EvalSha(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(multiBulkDataResultToSet(conv))
+      r.send(EvalSha(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(bulkResultToSet(conv))
 
   def evalsha[T](digest: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) = await { evalshaAsync(digest, kvs: _*) }
 

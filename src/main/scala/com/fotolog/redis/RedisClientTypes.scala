@@ -9,5 +9,5 @@ package com.fotolog.redis
  */
 object RedisClientTypes {
   type BinVal = Array[Byte]
-  type KV = Tuple2[String, BinVal]
+  type KV = (String, BinVal)
 }

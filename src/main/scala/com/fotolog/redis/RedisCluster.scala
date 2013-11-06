@@ -24,7 +24,7 @@ class RedisCluster[Shard](hash: (Shard)=>Int, hosts: RedisHost*) {
         }
         h2c.get(h) match {
             case None => newClientThreadSafe()
-            case Some(c) => if (c.isConnected){ c } else { c.shutdown; newClientThreadSafe() }
+            case Some(c) => if (c.isConnected){ c } else { c.shutdown(); newClientThreadSafe() }
         }
     }
 }

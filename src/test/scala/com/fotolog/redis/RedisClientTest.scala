@@ -180,7 +180,7 @@ class RedisClientTest extends TestCase {
     }
 
     def testEval() {
-      assertEquals(1, c.eval[Int]("return ARGV[1]", ("first", "1")).head)
+      assertEquals(2, c.eval[Int]("return ARGV[1];", ("anyKey", "2")).head)
     }
 
 
