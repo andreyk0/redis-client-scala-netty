@@ -90,18 +90,24 @@ class RedisClient(val r: RedisConnection) {
   def ping(): Boolean = await {
     r.send(Ping()).map {
       case SingleLineResult("PONG") => true
+      case _ => false
     }
   }
 
   def info: Map[String,String] = await {
     r.send(Info()).map {
       case BulkDataResult(Some(data)) =>
-          val info = BinaryConverter.StringConverter.read(data)
-          info.split("\r\n").map(_.split(":")).map(x => x(0) -> x(1)).toMap
+        val info = BinaryConverter.StringConverter.read(data)
+        info.split("\r\n").map(_.split(":")).map(x => x(0) -> x(1)).toMap
+      case x => throw new IllegalStateException("Invalid response got from server: " + x)
     }
   }
 
-  def keytypeAsync(key: String): Future[KeyType] = r.send(Type(key)).map { case SingleLineResult(s) => KeyType(s) }
+  def keytypeAsync(key: String): Future[KeyType] = r.send(Type(key)).map {
+    case SingleLineResult(s) => KeyType(s)
+    case x => throw new IllegalStateException("Invalid response got from server: " + x)
+  }
+
   def keytype(key: String): KeyType = await(keytypeAsync(key))
 
   def existsAsync(key: String): Future[Boolean] = r.send(Exists(key)).map(integerResultAsBoolean)
@@ -132,6 +138,7 @@ class RedisClient(val r: RedisConnection) {
   def getAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Seq[Option[T]]] = r.send(MGet(keys: _*)).map {
       case BulkDataResult(data) => Seq(data.map(conv.read))
       case MultiBulkDataResult(results) => results.map { _.data.map(conv.read) }
+      case x => throw new IllegalStateException("Invalid response got from server: " + x)
   }
 
   def get[T](key: String)(implicit conv: BinaryConverter[T]): Option[T] = await { getAsync(key)(conv) }

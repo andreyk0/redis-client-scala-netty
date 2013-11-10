@@ -181,6 +181,10 @@ private[redis] object RedisCommandEncoder {
 
   val EVAL = "EVAL".getBytes
   val EVALSHA = "EVALSHA".getBytes
+  val SCRIPT_LOAD = "SCRIPT LOAD".getBytes
+  val SCRIPT_FLUSH = "SCRIPT FLUSH".getBytes
+  val SCRIPT_KILL = "SCRIPT KILL".getBytes
+  val SCRIPT_EXISTS = "SCRIPT EXISTS".getBytes
 
   val PING = "PING".getBytes
   val EXISTS = "EXISTS".getBytes
@@ -201,39 +205,39 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
   }
 
   private def toChannelBuffer(cmd: Cmd): ChannelBuffer = cmd match {
-    case Del(key) => copiedBuffer(DEL, SPACE, key.getBytes(charset), EOL)
-    case Del(keys @ _*) => multiKeyCmd(DEL, keys)
-    case Get(key) => copiedBuffer(GET, SPACE, key.getBytes(charset), EOL)
-    case MGet(keys @ _*) => multiKeyCmd(MGET, keys)
+    case Del(key) => binaryCmd(DEL, key.getBytes(charset))
+    case Del(keys @ _*) => binaryCmd(DEL:: keys.toList.map(_.getBytes(charset)): _*)
+    case Get(key) => binaryCmd(GET, key.getBytes(charset))
+    case MGet(keys @ _*) => binaryCmd(MGET :: keys.toList.map(_.getBytes(charset)): _*)
     case Set(key, value) => binaryCmd(SET, key.getBytes(charset), value)
-    case mset: MSet => binarySetCmd(MSET, mset.kvs :_*)
+    case mset: MSet => binaryCmd(MSET :: mset.kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
     case GetSet((key, value)) => binaryCmd(GETSET, key.getBytes(charset), value)
     case SetNx((key, value)) => binaryCmd(SETNX, key.getBytes(charset), value)
-    case setNxMulti: SetNx => binarySetCmd(MSETNX, setNxMulti.kvs: _*)
+    case setNxMulti: SetNx => binaryCmd(MSETNX :: setNxMulti.kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
     case SetEx(key, expTime, value) => binaryCmd(SETEX, key.getBytes(charset), expTime.toString.getBytes(charset), value)
-    case Incr(key, 1) => copiedBuffer(INCR, SPACE, key.getBytes(charset), EOL)
-    case Incr(key, delta) => copiedBuffer(INCRBY, SPACE, key.getBytes(charset), SPACE, delta.toString.getBytes(charset), EOL)
-    case Decr(key, 1) => copiedBuffer(DECR, SPACE, key.getBytes(charset), EOL)
-    case Decr(key, delta) => copiedBuffer(DECRBY, SPACE, key.getBytes(charset), SPACE, delta.toString.getBytes(charset), EOL)
+    case Incr(key, 1) =>  binaryCmd(INCR, key.getBytes(charset))
+    case Incr(key, delta) => binaryCmd(INCRBY, key.getBytes(charset), delta.toString.getBytes(charset))
+    case Decr(key, 1) => binaryCmd(DECR, key.getBytes(charset))
+    case Decr(key, delta) => binaryCmd(DECRBY, key.getBytes(charset), delta.toString.getBytes(charset))
     case Append((key, value)) => binaryCmd(APPEND, key.getBytes(charset), value)
-    case Substr(key, startOffset, endOffset) => copiedBuffer(SUBSTR, SPACE, key.getBytes(charset), SPACE, startOffset.toString.getBytes(charset), SPACE, endOffset.toString.getBytes(charset), EOL)
-    case Persist(key) => copiedBuffer(PERSIST, SPACE, key.getBytes(charset), EOL)
-    case Expire(key, seconds) => copiedBuffer(EXPIRE, SPACE, key.getBytes(charset), SPACE, seconds.toString.getBytes(charset), EOL)
+    case Substr(key, startOffset, endOffset) => binaryCmd(SUBSTR, key.getBytes(charset), startOffset.toString.getBytes(charset), endOffset.toString.getBytes(charset))
+    case Persist(key) => binaryCmd(PERSIST, key.getBytes(charset))
+    case Expire(key, seconds) => binaryCmd(EXPIRE, key.getBytes(charset), seconds.toString.getBytes(charset))
     case Rpush((key, value)) => binaryCmd(RPUSH, key.getBytes(charset), value)
     case Lpush((key, value)) => binaryCmd(LPUSH, key.getBytes(charset), value)
-    case Llen(key) => copiedBuffer(LLEN, SPACE, key.getBytes(charset), EOL)
-    case Lrange(key, start, end) => copiedBuffer(LRANGE, SPACE, key.getBytes(charset), SPACE, start.toString.getBytes(charset), SPACE, end.toString.getBytes(charset), EOL)
-    case Ltrim(key, start, end) => copiedBuffer(LTRIM, SPACE, key.getBytes(charset), SPACE, start.toString.getBytes(charset), SPACE, end.toString.getBytes(charset), EOL)
-    case Lindex(key, idx) => copiedBuffer(LINDEX, SPACE, key.getBytes(charset), SPACE, idx.toString.getBytes(charset), EOL)
+    case Llen(key) => binaryCmd(LLEN, key.getBytes(charset))
+    case Lrange(key, start, end) => binaryCmd(LRANGE, key.getBytes(charset), start.toString.getBytes(charset), end.toString.getBytes(charset))
+    case Ltrim(key, start, end) => binaryCmd(LTRIM, key.getBytes(charset), start.toString.getBytes(charset), end.toString.getBytes(charset))
+    case Lindex(key, idx) => binaryCmd(LINDEX, key.getBytes(charset), idx.toString.getBytes(charset))
     case Lset(key, idx, value) => binaryCmd(LSET, key.getBytes(charset), idx.toString.getBytes(charset), value)
     case Lrem(key, count, value) => binaryCmd(LREM, key.getBytes(charset), count.toString.getBytes(charset), value)
-    case Lpop(key) => copiedBuffer(LPOP, SPACE, key.getBytes(charset), EOL)
-    case Rpop(key) => copiedBuffer(RPOP, SPACE, key.getBytes(charset), EOL)
-    case RpopLpush(srcKey, destKey) => copiedBuffer(RPOPLPUSH, SPACE, srcKey.getBytes(charset), SPACE, destKey.getBytes(charset), EOL)
+    case Lpop(key) => binaryCmd(LPOP, key.getBytes(charset))
+    case Rpop(key) => binaryCmd(RPOP, key.getBytes(charset))
+    case RpopLpush(srcKey, destKey) => binaryCmd(RPOPLPUSH, srcKey.getBytes(charset), destKey.getBytes(charset))
     case Hset(key, field, value) => binaryCmd(HSET, key.getBytes(charset), field.getBytes(charset), value)
     case Hget(key, field) => binaryCmd(HGET, key.getBytes(charset), field.getBytes(charset))
     case Hmget(key, fields @ _*) => binaryCmd(HMGET :: key.getBytes(charset) :: fields.toList.map{_.getBytes(charset)}: _*)
-    case hmSet: Hmset => binaryHmSetCmd(hmSet)
+    case hmSet: Hmset => binaryCmd(HMSET :: hmSet.key.getBytes :: hmSet.kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
     case Hincrby(key, field, delta) => binaryCmd(HINCRBY, key.getBytes(charset), field.getBytes(charset), delta.toString.getBytes(charset))
     case Hexists(key, field) => binaryCmd(HEXISTS, key.getBytes(charset), field.getBytes(charset))
     case Hdel(key, field) => binaryCmd(HDEL, key.getBytes(charset), field.getBytes(charset))
@@ -243,9 +247,9 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
     case Hgetall(key) => binaryCmd(HGETALL, key.getBytes(charset))
     case Sadd((key, value)) => binaryCmd(SADD, key.getBytes(charset), value)
     case Srem((key, value)) => binaryCmd(SREM, key.getBytes(charset), value)
-    case Spop(key) => copiedBuffer(SPOP, SPACE, key.getBytes(charset), EOL)
+    case Spop(key) => binaryCmd(SPOP, key.getBytes(charset))
     case Smove(srcKey, destKey, value) => binaryCmd(SMOVE, srcKey.getBytes(charset), destKey.getBytes(charset), value)
-    case Scard(key) => copiedBuffer(SCARD, SPACE, key.getBytes(charset), EOL)
+    case Scard(key) => binaryCmd(SCARD, key.getBytes(charset))
     case Sismember((key, value)) => binaryCmd(SISMEMBER, key.getBytes(charset), value)
     case Sinter(keys @ _*) => binaryCmd(SINTER :: keys.toList.map{_.getBytes(charset)}: _*)
     case Sinterstore(destKey, keys @ _*) => binaryCmd(SINTERSTORE :: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}: _*)
@@ -253,43 +257,28 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
     case Sunionstore(destKey, keys @ _*) => binaryCmd(SUNIONSTORE:: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}: _*)
     case Sdiff(keys @ _*) => binaryCmd(SDIFF :: keys.toList.map{_.getBytes(charset)}: _*)
     case Sdiffstore(destKey, keys @ _*) => binaryCmd(SDIFFSTORE :: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}: _*)
-    case Smembers(key) => copiedBuffer(SMEMBERS, SPACE, key.getBytes(charset), EOL)
-    case Srandmember(key) => copiedBuffer(SRANDMEMBER, SPACE, key.getBytes(charset), EOL)
+    case Smembers(key) => binaryCmd(SMEMBERS, key.getBytes(charset))
+    case Srandmember(key) => binaryCmd(SRANDMEMBER, key.getBytes(charset))
 
     case eval: Eval => binaryCmd(EVAL :: eval.script.getBytes(charset) :: eval.kv.length.toString.getBytes :: eval.kv.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
     case evalsha: EvalSha => binaryCmd(EVALSHA :: evalsha.digest.getBytes(charset) :: evalsha.kv.length.toString.getBytes :: evalsha.kv.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
 
-    case Ping() => copiedBuffer(PING, EOL)
-    case Exists(key) => copiedBuffer(EXISTS, SPACE, key.getBytes(charset), EOL)
-    case Type(key) => copiedBuffer(TYPE, SPACE, key.getBytes(charset), EOL)
-    case Info() => copiedBuffer(INFO, EOL)
-    case FlushAll() => copiedBuffer(FLUSHALL, EOL)
-  }
+    case ScriptLoad(script) => binaryCmd(SCRIPT_LOAD, script.getBytes(charset))
+    case ScriptKill() => binaryCmd(SCRIPT_KILL)
+    case ScriptFlush() => binaryCmd(SCRIPT_KILL)
+    case exists: ScriptExists => binaryCmd(SCRIPT_EXISTS, exists.script.getBytes(charset))
 
-  private def multiKeyCmd(cmd: BinVal, keys: Seq[String]): ChannelBuffer = {
-    val params = new Array[BinVal](2*keys.length + 2)
-    params(0) = cmd
-    var i = 1
-    for(k <- keys) {
-        params(i) = SPACE       ; i = i+1
-        params(i) = k.getBytes(charset)  ; i = i+1
-    }
-    params(params.length - 1) = EOL
-    copiedBuffer(params: _*)
-  }
-
-  private def binaryHmSetCmd(hmSet: Hmset): ChannelBuffer = {
-    binaryCmd(HMSET :: hmSet.key.getBytes :: hmSet.kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
-  }
-
-  private def binarySetCmd(cmd: BinVal, kvs: KV*): ChannelBuffer = {
-    binaryCmd(cmd :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
+    case Ping() => binaryCmd(PING)
+    case Exists(key) => binaryCmd(EXISTS, key.getBytes(charset))
+    case Type(key) => binaryCmd(TYPE, key.getBytes(charset))
+    case Info() => binaryCmd(INFO)
+    case FlushAll() => binaryCmd(FLUSHALL)
   }
 
   private def binaryCmd(cmdParts: BinVal*): ChannelBuffer = {
     val params = new Array[BinVal](3*cmdParts.length + 1)
     params(0) = ("*" + cmdParts.length + "\r\n").getBytes // num binary chunks
-    var i=1
+    var i = 1
     for(p <- cmdParts) {
         params(i) = ("$" + p.length + "\r\n").getBytes // len of the chunk
         i = i+1

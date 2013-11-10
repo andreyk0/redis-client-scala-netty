@@ -60,10 +60,15 @@ case class Sdiffstore(destKey: String, keys: String*) extends Cmd
 case class Smembers(key: String) extends Cmd
 case class Srandmember(key: String) extends Cmd
 
+// scripting
 case class Eval(script: String, kv: KV*) extends Cmd
 case class EvalSha(digest: String, kv: KV*) extends Cmd
+case class ScriptLoad(script: String) extends Cmd
+case class ScriptKill() extends Cmd
+case class ScriptFlush() extends Cmd
+case class ScriptExists(script: String) extends Cmd
 
-//
+// utils
 case class Ping() extends Cmd
 case class Info() extends Cmd
 case class FlushAll() extends Cmd
