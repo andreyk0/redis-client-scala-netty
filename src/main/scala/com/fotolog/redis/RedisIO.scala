@@ -118,7 +118,7 @@ class RedisConnection(val host: String = "localhost", val port: Int = 6379) {
 @Sharable
 private[redis] class RedisCommandEncoder extends OneToOneEncoder {
   import org.jboss.netty.buffer.ChannelBuffers._
-  import RedisCommandEncoder._
+  import Cmd._
 
   override def encode(ctx: ChannelHandlerContext, channel: Channel, msg: AnyRef): AnyRef = {
     val opFuture = msg.asInstanceOf[ResultFuture]

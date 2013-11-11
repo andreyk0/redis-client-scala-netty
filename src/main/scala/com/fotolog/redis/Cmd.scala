@@ -1,10 +1,9 @@
 package com.fotolog.redis
 
 import RedisClientTypes._
-import RedisCommandEncoder._
 import java.nio.charset.Charset
 
-private[redis] object RedisCommandEncoder {
+private[redis] object Cmd {
 
   val charset = Charset.forName("UTF-8")
 
@@ -82,6 +81,7 @@ private[redis] object RedisCommandEncoder {
   val FLUSHALL = "FLUSHALL".getBytes
 }
 
+import Cmd._
 sealed abstract class Cmd {
   def asBin: Seq[BinVal]
 }
