@@ -2,6 +2,85 @@ package com.fotolog.redis
 
 import RedisClientTypes._
 import RedisCommandEncoder._
+import java.nio.charset.Charset
+
+private[redis] object RedisCommandEncoder {
+
+  val charset = Charset.forName("UTF-8")
+
+  val SPACE = " ".getBytes
+  val EOL = "\r\n".getBytes
+
+  val DEL = "DEL".getBytes
+  val GET = "GET".getBytes
+  val MGET = "MGET".getBytes
+  val SET = "SET".getBytes
+  val MSET = "MSET".getBytes
+  val GETSET = "GETSET".getBytes
+  val SETNX = "SETNX".getBytes
+  val MSETNX = "MSETNX".getBytes
+  val SETEX = "SETEX".getBytes
+  val INCR = "INCR".getBytes
+  val INCRBY = "INCRBY".getBytes
+  val DECR = "DECR".getBytes
+  val DECRBY = "DECRBY".getBytes
+  val APPEND = "APPEND".getBytes
+  val SUBSTR = "SUBSTR".getBytes
+  val EXPIRE = "EXPIRE".getBytes
+  val PERSIST = "PERSIST".getBytes
+  val RPUSH = "RPUSH".getBytes
+  val LPUSH = "LPUSH".getBytes
+  val LLEN = "LLEN".getBytes
+  val LRANGE = "LRANGE".getBytes
+  val LTRIM = "LTRIM".getBytes
+  val LINDEX = "LINDEX".getBytes
+  val LSET = "LSET".getBytes
+  val LREM = "LREM".getBytes
+  val LPOP = "LPOP".getBytes
+  val RPOP = "RPOP".getBytes
+  val BLPOP = "BLPOP".getBytes
+  val BRPOP = "BRPOP".getBytes
+  val RPOPLPUSH = "RPOPLPUSH".getBytes
+  val HSET = "HSET".getBytes
+  val HGET = "HGET".getBytes
+  val HMGET = "HMGET".getBytes
+  val HMSET = "HMSET".getBytes
+  val HINCRBY = "HINCRBY".getBytes
+  val HEXISTS    = "HEXISTS".getBytes
+  val HDEL = "HDEL".getBytes
+  val HLEN = "HLEN".getBytes
+  val HKEYS = "HKEYS".getBytes
+  val HVALS = "HVALS".getBytes
+  val HGETALL = "HGETALL".getBytes
+  val SADD = "SADD".getBytes
+  val SREM = "SREM".getBytes
+  val SPOP = "SPOP".getBytes
+  val SMOVE = "SMOVE".getBytes
+  val SCARD = "SCARD".getBytes
+  val SISMEMBER = "SISMEMBER".getBytes
+  val SINTER = "SINTER".getBytes
+  val SINTERSTORE = "SINTERSTORE".getBytes
+  val SUNION = "SUNION".getBytes
+  val SUNIONSTORE = "SUNIONSTORE".getBytes
+  val SDIFF = "SDIFF".getBytes
+  val SDIFFSTORE = "SDIFFSTORE".getBytes
+  val SMEMBERS = "SMEMBERS".getBytes
+  val SRANDMEMBER = "SRANDMEMBER".getBytes
+  val SORT = "SORT".getBytes
+
+  val EVAL = "EVAL".getBytes
+  val EVALSHA = "EVALSHA".getBytes
+  val SCRIPT_LOAD = "SCRIPT LOAD".getBytes
+  val SCRIPT_FLUSH = "SCRIPT FLUSH".getBytes
+  val SCRIPT_KILL = "SCRIPT KILL".getBytes
+  val SCRIPT_EXISTS = "SCRIPT EXISTS".getBytes
+
+  val PING = "PING".getBytes
+  val EXISTS = "EXISTS".getBytes
+  val TYPE = "TYPE".getBytes
+  val INFO = "INFO".getBytes
+  val FLUSHALL = "FLUSHALL".getBytes
+}
 
 sealed abstract class Cmd {
   def asBin: Seq[BinVal]
@@ -22,8 +101,7 @@ case class Del(keys: String*) extends Cmd {
 }
 
 case class Get(key: String) extends Cmd {
-  def asBin =
-    Seq(GET, key.getBytes(charset))
+  def asBin = Seq(GET, key.getBytes(charset))
 }
 
 case class MGet(keys: String*) extends Cmd {
@@ -47,17 +125,17 @@ case class GetSet(kv: KV) extends Cmd {
 }
 
 case class SetEx(key: String, expTime: Int, value: BinVal) extends Cmd {
-  def asBin = Seq(SETEX, key.getBytes(charset), expTime.toString.getBytes(charset), value)
+  def asBin = Seq(SETEX, key.getBytes(charset), expTime.toString.getBytes, value)
 }
 
 case class Incr(key: String, delta: Int = 1) extends Cmd {
   def asBin = if(delta == 1) Seq(INCR, key.getBytes(charset))
-    else Seq(INCRBY, key.getBytes(charset), delta.toString.getBytes(charset))
+    else Seq(INCRBY, key.getBytes(charset), delta.toString.getBytes)
 }
 
 case class Decr(key: String, delta: Int = 1) extends Cmd {
   def asBin = if(delta == 1) Seq(DECR, key.getBytes(charset))
-    else Seq(DECRBY, key.getBytes(charset), delta.toString.getBytes(charset))
+    else Seq(DECRBY, key.getBytes(charset), delta.toString.getBytes)
 }
 
 case class Append(kv: KV) extends Cmd {
@@ -65,7 +143,7 @@ case class Append(kv: KV) extends Cmd {
 }
 
 case class Substr(key: String, startOffset: Int, endOffset: Int) extends Cmd {
-  def asBin = Seq(SUBSTR, key.getBytes(charset), startOffset.toString.getBytes(charset), endOffset.toString.getBytes(charset))
+  def asBin = Seq(SUBSTR, key.getBytes(charset), startOffset.toString.getBytes, endOffset.toString.getBytes)
 }
 
 case class Expire(key: String, seconds: Int) extends Cmd {
@@ -90,23 +168,23 @@ case class Llen(key: String) extends Cmd {
 }
 
 case class Lrange(key: String, start: Int, end: Int) extends Cmd {
-  def asBin = Seq(LRANGE, key.getBytes(charset), start.toString.getBytes(charset), end.toString.getBytes(charset))
+  def asBin = Seq(LRANGE, key.getBytes(charset), start.toString.getBytes, end.toString.getBytes)
 }
 
 case class Ltrim(key: String, start: Int, end: Int) extends Cmd {
-  def asBin = Seq(LTRIM, key.getBytes(charset), start.toString.getBytes(charset), end.toString.getBytes(charset))
+  def asBin = Seq(LTRIM, key.getBytes(charset), start.toString.getBytes, end.toString.getBytes)
 }
 
 case class Lindex(key: String, idx: Int) extends Cmd {
-  def asBin = Seq(LINDEX, key.getBytes(charset), idx.toString.getBytes(charset))
+  def asBin = Seq(LINDEX, key.getBytes(charset), idx.toString.getBytes)
 }
 
 case class Lset(key: String, idx: Int, value: BinVal) extends Cmd {
-  def asBin = Seq(LSET, key.getBytes(charset), idx.toString.getBytes(charset), value)
+  def asBin = Seq(LSET, key.getBytes(charset), idx.toString.getBytes, value)
 }
 
 case class Lrem(key: String, count: Int, value: BinVal) extends Cmd {
-  def asBin = Seq(LREM, key.getBytes(charset), count.toString.getBytes(charset), value)
+  def asBin = Seq(LREM, key.getBytes(charset), count.toString.getBytes, value)
 }
 
 case class Lpop(key: String) extends Cmd {
@@ -138,7 +216,7 @@ case class Hmset(key:String, kvs: KV*) extends Cmd {
 }
 
 case class Hincrby(key: String, field: String, delta: Int) extends Cmd {
-  def asBin = Seq(HINCRBY, key.getBytes(charset), field.getBytes(charset), delta.toString.getBytes(charset))
+  def asBin = Seq(HINCRBY, key.getBytes(charset), field.getBytes(charset), delta.toString.getBytes)
 }
 
 case class Hexists(key: String, field: String) extends Cmd {
@@ -198,11 +276,11 @@ case class Sinterstore(destKey: String, keys: String*) extends Cmd {
 }
 
 case class Sunion(keys: String*) extends Cmd {
-  def asBin = SUNION:: keys.toList.map{_.getBytes(charset)}
+  def asBin = SUNION :: keys.toList.map(_.getBytes(charset))
 }
 
 case class Sunionstore(destKey: String, keys: String*) extends Cmd {
-  def asBin = SUNIONSTORE:: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}
+  def asBin = SUNIONSTORE :: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}
 }
 
 case class Sdiff(keys: String*) extends Cmd {
