@@ -181,6 +181,26 @@ class RedisClientTest extends TestCase {
 
     def testEval() {
       assertEquals(2, c.eval[Int]("return ARGV[1];", ("anyKey", "2")).head)
+      assertEquals("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", c.scriptLoad("return ARGV[1];"))
+      assertEquals(4, c.evalsha[Int]("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", ("key", "4")).head)
+
+
+      assertTrue(c.scriptExists("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228"))
+      assertTrue(c.scriptFlush())
+
+      assertFalse(c.scriptExists("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228"))
+
+      /*
+      def scriptLoadAsync[T](script: String, kvs: (String, String)*) = r.send(ScriptLoad(script)).map { case SingleLineResult(hash) => hash }
+      def scriptLoad[T](script: String) = await { scriptLoadAsync(script) }
+      def scriptKillAsync() = r.send(ScriptKill()).map(okResultAsBoolean)
+      def scriptKill() = await { scriptKillAsync() }
+      def scriptFlushAsync() = r.send(ScriptFlush()).map(okResultAsBoolean)
+      def scriptFlush() = await { scriptFlushAsync() }
+      def scriptExistsAsync(script: String) = r.send(ScriptExists(script)).map(okResultAsBoolean)
+      def scriptExists(script: String) = await { scriptExistsAsync(script) }
+      */
+
     }
 
 

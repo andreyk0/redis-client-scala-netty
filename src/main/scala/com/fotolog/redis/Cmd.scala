@@ -69,10 +69,12 @@ private[redis] object Cmd {
 
   val EVAL = "EVAL".getBytes
   val EVALSHA = "EVALSHA".getBytes
-  val SCRIPT_LOAD = "SCRIPT LOAD".getBytes
-  val SCRIPT_FLUSH = "SCRIPT FLUSH".getBytes
-  val SCRIPT_KILL = "SCRIPT KILL".getBytes
-  val SCRIPT_EXISTS = "SCRIPT EXISTS".getBytes
+
+  val SCRIPT = "SCRIPT".getBytes
+  val SCRIPT_LOAD = "LOAD".getBytes
+  val SCRIPT_FLUSH = "FLUSH".getBytes
+  val SCRIPT_KILL = "KILL".getBytes
+  val SCRIPT_EXISTS = "EXISTS".getBytes
 
   val PING = "PING".getBytes
   val EXISTS = "EXISTS".getBytes
@@ -309,12 +311,12 @@ case class EvalSha(digest: String, kv: KV*) extends Cmd {
 }
 
 case class ScriptLoad(script: String) extends Cmd {
-  def asBin = Seq(SCRIPT_LOAD, script.getBytes(charset))
+  def asBin = Seq(SCRIPT, SCRIPT_LOAD, script.getBytes(charset))
 }
 
-case class ScriptKill() extends Cmd { def asBin = Seq(SCRIPT_KILL) }
-case class ScriptFlush() extends Cmd { def asBin = Seq(SCRIPT_FLUSH) }
-case class ScriptExists(script: String) extends Cmd { def asBin = Seq(SCRIPT_EXISTS, script.getBytes(charset)) }
+case class ScriptKill() extends Cmd { def asBin = Seq(SCRIPT, SCRIPT_KILL) }
+case class ScriptFlush() extends Cmd { def asBin = Seq(SCRIPT, SCRIPT_FLUSH) }
+case class ScriptExists(script: String) extends Cmd { def asBin = Seq(SCRIPT, SCRIPT_EXISTS, script.getBytes(charset)) }
 
 // utils
 case class Ping() extends Cmd { def asBin = Seq(PING) }

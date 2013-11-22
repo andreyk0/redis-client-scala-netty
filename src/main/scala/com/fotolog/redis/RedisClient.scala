@@ -383,5 +383,26 @@ class RedisClient(val r: RedisConnection) {
 
   def evalsha[T](digest: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) = await { evalshaAsync(digest, kvs: _*) }
 
+  def scriptLoadAsync(script: String) = r.send(ScriptLoad(script)).map {
+    case BulkDataResult(Some(data)) => new String(data)
+    case ErrorResult(err) => throw ScriptSyntaxException(err)
+  }
+
+  def scriptLoad(script: String) = await { scriptLoadAsync(script) }
+
+  def scriptKillAsync() = r.send(ScriptKill()).map(okResultAsBoolean)
+
+  def scriptKill() = await { scriptKillAsync() }
+
+  def scriptFlushAsync() = r.send(ScriptFlush()).map(okResultAsBoolean)
+
+  def scriptFlush() = await { scriptFlushAsync() }
+
+  def scriptExistsAsync(script: String) = r.send(ScriptExists(script)).map {
+    case BulkDataResult(Some(data)) => !"0".equals(new String(data))
+  }
+
+  def scriptExists(script: String) = await { scriptExistsAsync(script) }
+
   def await[T](f: Future[T]) = Await.result[T](f, timeout)
 }
