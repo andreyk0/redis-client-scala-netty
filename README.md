@@ -78,23 +78,24 @@ of for maven:
  
  Conversion is implemented using BinaryConverter interface.
 
-  import com.google.protobuf.{CodedOutputStream,CodedInputStream}
+    import com.google.protobuf.{CodedOutputStream,CodedInputStream}
 
-  implicit val intProtobufConverter = new BinaryConverter[Int]() {
-    def read(data: BinVal) = {
-        val is = CodedInputStream.newInstance(b)
-        is.readInt32()    
+    implicit val intProtobufConverter = new BinaryConverter[Int]() {
+        def read(data: BinVal) = {
+            val is = CodedInputStream.newInstance(b)
+            is.readInt32()    
+        }
+        
+        def write(v: Int) = {
+            val barr = new Array[Byte](CodedOutputStream.computeInt32SizeNoTag(i))
+            val os = CodedOutputStream.newInstance(barr)
+            os.writeInt32NoTag(i)
+            barr
+        }
     }
-    
-    def write(v: Int) = {
-        val barr = new Array[Byte](CodedOutputStream.computeInt32SizeNoTag(i))
-        val os = CodedOutputStream.newInstance(barr)
-        os.writeInt32NoTag(i)
-        barr
-    }
-  }
 
- Conversion objects can be passed explicitly:
+
+Conversion objects can be passed explicitly:
  
     c.set("key-name", 15)(intProtobufConverter)
     
