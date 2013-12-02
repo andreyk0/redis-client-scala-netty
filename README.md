@@ -1,7 +1,12 @@
-## [Redis](http://code.google.com/p/redis/) scala client library
-We are working on this code @fotolog.com, decided to open it up in case somebody else finds it useful.
+## [Redis](http://redis.io) scala client library
 
-Tested with Redis version 2.0.1, some commands won't work with older version
+Forked from [andreyk0](https://github.com/andreyk0/redis-client-scala-netty).
+
+Changes from original one:
+* added support of [scripting](http://redis.io/commands#scripting) commands
+* moved to scala [futures](http://docs.scala-lang.org/overviews/core/futures.html)
+* binary safe requests encoding
+* added maven support
 
 ## Why yet another scala client?
 * binary safe values
@@ -9,28 +14,25 @@ Tested with Redis version 2.0.1, some commands won't work with older version
 * protocol pipelining
 * connection multiplexing
 
-
-## To build (requires buildr tool from http://buildr.apache.org/):
+## Building by [buildr tool](http://buildr.apache.org/):
     $ buildr package
 
-Ruby gem system is a bit quirky on ubuntu 10.04, so, download buildr-1.4.1.gem from [rubygems](http://rubygems.org/) and  
-
-    $ export JAVA_HOME=/path/to/your/java
-    $ sudo gem install buildr-1.4.1.gem
-    $ export PATH=/var/lib/gems/1.8/bin:$PATH
+## Building by [maven](http://maven.apache.org/):
+    $ mvn package
 
 Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH ALL DATA!
 To quickly build/package without running the tests:
 
     $ buildr package test=no
 
+of for maven:
+
+    $ mvn package -DskipTests=true
 
 ## Example usage with scala REPL
-    $ buildr shell
 
-    import com.fotolog.redis.{RedisCluster, RedisClient, RedisHost, Conversions}
-    import Conversions._
-    
+    import com.fotolog.redis.{RedisCluster, RedisClient, RedisHost}
+
     val shardingHashFun = (s:String)=>s.hashCode // shard on string values
     val cluster = new RedisCluster[String](shardingHashFun, RedisHost("localhost", 6379) /*, more redis hosts */)
     
@@ -55,43 +57,45 @@ To quickly build/package without running the tests:
     
     // async calls
     val future = r.lpopAsync[String]("ll") // prefetch data
-    // .... do something else
-    future.get
+    future.map(_.toLong) // map to another value
     
-    // explicit encoding/decoding of binary values
-    r.set("boo", "foo") { x: String =>
-        x.getBytes("UTF-8")
+    // Do something else 
+    
+    import scala.concurrent.Await
+    import scala.concurrent.duration.Duration
+    import java.util.concurrent.TimeUnit
+    
+    val res = Await.result(future, Duration(1, TimeUnit.MINUTES)) // wait for result for 1 min.
+
+    // dealing with Lua scripts:
+    
+    val resultsList = c.eval[Int]("return ARGV[1];", ("anyKey", "2"))
+    val scriptHash = c.scriptLoad("return ARGV[1];")
+    val evalResultsList = c.evalsha[Int](scriptHash, ("key", "4"))
+
+
+## Example of adding custom conversion objects
+ 
+ Conversion is implemented using BinaryConverter interface.
+
+  import com.google.protobuf.{CodedOutputStream,CodedInputStream}
+
+  implicit val intProtobufConverter = new BinaryConverter[Int]() {
+    def read(data: BinVal) = {
+        val is = CodedInputStream.newInstance(b)
+        is.readInt32()    
     }
-    r.get("boo") { x: Array[Byte] =>
-        new String(x, "UTF-8")
-    }
-
-
-## Example of adding other conversion functions
-
-   import com.google.protobuf.{CodedOutputStream,CodedInputStream}
-
-    implicit def convertIntToByteArray(i: Int): Array[Byte] = {
+    
+    def write(v: Int) = {
         val barr = new Array[Byte](CodedOutputStream.computeInt32SizeNoTag(i))
         val os = CodedOutputStream.newInstance(barr)
         os.writeInt32NoTag(i)
         barr
     }
-    implicit def convertByteArrayToInt(b: Array[Byte]): Int = {
-        val is = CodedInputStream.newInstance(b)
-        is.readInt32()
-    }
-    implicit def convertLongToByteArray(i: Long): Array[Byte] = {
-        val barr = new Array[Byte](CodedOutputStream.computeInt64SizeNoTag(i))
-        val os = CodedOutputStream.newInstance(barr)
-        os.writeInt64NoTag(i)
-        barr
-    }
-    implicit def convertByteArrayToLong(b: Array[Byte]): Long = {
-        val is = CodedInputStream.newInstance(b)
-        is.readInt64()
-    }
+  }
 
-    import com.google.protobuf.Message
-    implicit def convertProtobufToByteArray(m: Message): Array[Byte] = m.toByteArray
-    // to convert back from protobuf pass { YourProto.parseFrom } as a conversion function
+ Conversion objects can be passed explicitly:
+ 
+    c.set("key-name", 15)(intProtobufConverter)
+    
+ 
