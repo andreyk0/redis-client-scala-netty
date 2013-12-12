@@ -14,6 +14,9 @@ private[redis] object Cmd {
   val GET = "GET".getBytes
   val MGET = "MGET".getBytes
   val SET = "SET".getBytes
+  val EX = "EX".getBytes
+  val NX = "NX".getBytes
+
   val MSET = "MSET".getBytes
   val GETSET = "GETSET".getBytes
   val SETNX = "SETNX".getBytes
@@ -27,6 +30,7 @@ private[redis] object Cmd {
   val SUBSTR = "SUBSTR".getBytes
   val EXPIRE = "EXPIRE".getBytes
   val PERSIST = "PERSIST".getBytes
+
   val RPUSH = "RPUSH".getBytes
   val LPUSH = "LPUSH".getBytes
   val LLEN = "LLEN".getBytes
@@ -40,6 +44,7 @@ private[redis] object Cmd {
   val BLPOP = "BLPOP".getBytes
   val BRPOP = "BRPOP".getBytes
   val RPOPLPUSH = "RPOPLPUSH".getBytes
+
   val HSET = "HSET".getBytes
   val HGET = "HGET".getBytes
   val HMGET = "HMGET".getBytes
@@ -51,6 +56,7 @@ private[redis] object Cmd {
   val HKEYS = "HKEYS".getBytes
   val HVALS = "HVALS".getBytes
   val HGETALL = "HGETALL".getBytes
+
   val SADD = "SADD".getBytes
   val SREM = "SREM".getBytes
   val SPOP = "SPOP".getBytes
@@ -128,6 +134,10 @@ case class GetSet(kv: KV) extends Cmd {
 
 case class SetEx(key: String, expTime: Int, value: BinVal) extends Cmd {
   def asBin = Seq(SETEX, key.getBytes(charset), expTime.toString.getBytes, value)
+}
+
+case class SetExNx(key: String, expTime: Int, value: BinVal) extends Cmd {
+  def asBin = Seq(SET, key.getBytes(charset), NX, EX, expTime.toString.getBytes, value)
 }
 
 case class Incr(key: String, delta: Int = 1) extends Cmd {

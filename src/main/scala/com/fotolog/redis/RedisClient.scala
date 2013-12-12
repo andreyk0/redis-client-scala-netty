@@ -158,6 +158,12 @@ class RedisClient(val r: RedisConnection) {
   def setnx[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Boolean =
     await { setnxAsync(key, value)(conv) }
 
+  def setnxAsync[T](key: String, expiration: Int, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
+    r.send(SetNx(key -> conv.write(value))).map(integerResultAsBoolean)
+
+  def setnx[T](key: String, expiration: Int, value: T)(implicit conv: BinaryConverter[T]): Boolean =
+    await { setnxAsync(key, expiration, value)(conv) }
+
   def setnx[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { setnxAsync(kvs: _*)(conv) }
 
   def getsetAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
