@@ -16,6 +16,7 @@ private[redis] object Cmd {
   val SET = "SET".getBytes
   val EX = "EX".getBytes
   val NX = "NX".getBytes
+  val KEYS = "KEYS".getBytes
 
   val MSET = "MSET".getBytes
   val GETSET = "GETSET".getBytes
@@ -82,6 +83,12 @@ private[redis] object Cmd {
   val SCRIPT_KILL = "KILL".getBytes
   val SCRIPT_EXISTS = "EXISTS".getBytes
 
+  val MULTI = "MULTI".getBytes
+  val EXEC = "EXEC".getBytes
+  val DISCARD = "DISCARD".getBytes
+  val WATCH = "WATCH".getBytes
+  val UNWATCH = "UNWATCH".getBytes
+
   val PING = "PING".getBytes
   val EXISTS = "EXISTS".getBytes
   val TYPE = "TYPE".getBytes
@@ -116,7 +123,7 @@ case class MGet(keys: String*) extends Cmd {
   def asBin = MGET :: keys.toList.map(_.getBytes(charset))
 }
 
-case class Set(key: String, v: BinVal) extends Cmd {
+case class SetCmd(key: String, v: BinVal) extends Cmd {
   def asBin = Seq(SET, key.getBytes(charset), v)
 }
 
@@ -164,6 +171,10 @@ case class Expire(key: String, seconds: Int) extends Cmd {
 
 case class Persist(key: String) extends Cmd {
   def asBin = Seq(PERSIST, key.getBytes(charset))
+}
+
+case class Keys(pattern: String) extends Cmd {
+  def asBin = Seq(KEYS, pattern.getBytes(charset))
 }
 
 // lists
@@ -327,6 +338,14 @@ case class ScriptLoad(script: String) extends Cmd {
 case class ScriptKill() extends Cmd { def asBin = Seq(SCRIPT, SCRIPT_KILL) }
 case class ScriptFlush() extends Cmd { def asBin = Seq(SCRIPT, SCRIPT_FLUSH) }
 case class ScriptExists(script: String) extends Cmd { def asBin = Seq(SCRIPT, SCRIPT_EXISTS, script.getBytes(charset)) }
+
+// transactioning
+
+case class Multi() extends Cmd { def asBin = Seq(MULTI) }
+case class Exec() extends Cmd { def asBin = Seq(EXEC) }
+case class Discard() extends Cmd { def asBin = Seq(DISCARD) }
+case class Watch(keys: String*)  extends Cmd { def asBin = WATCH :: keys.map(_.getBytes(charset)).toList }
+case class Unwatch()  extends Cmd { def asBin = Seq(UNWATCH) }
 
 // utils
 case class Ping() extends Cmd { def asBin = Seq(PING) }

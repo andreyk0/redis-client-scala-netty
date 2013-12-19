@@ -5,6 +5,8 @@ import junit.framework.TestCase
 import org.junit._
 import Assert._
 
+import RedisClient._
+
 class RedisClientTest extends TestCase {
   val c = RedisClient("localhost", 6379) // non-default port, just in case as this wipes out all data
 
@@ -185,7 +187,7 @@ class RedisClientTest extends TestCase {
     assertTrue(SCSet("foo", "bar", "baz").contains(c.srandmember[String]("set1").get))
   }
 
-  def testEval() {
+  def testScripting() {
     assertEquals(2, c.eval[Int]("return ARGV[1];", ("anyKey", "2")).head)
     assertEquals("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", c.scriptLoad("return ARGV[1];"))
     assertEquals(4, c.evalsha[Int]("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", ("key", "4")).head)
@@ -195,18 +197,20 @@ class RedisClientTest extends TestCase {
     assertTrue(c.scriptFlush())
 
     assertFalse(c.scriptExists("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228"))
+  }
 
-    /*
-    def scriptLoadAsync[T](script: String, kvs: (String, String)*) = r.send(ScriptLoad(script)).map { case SingleLineResult(hash) => hash }
-    def scriptLoad[T](script: String) = await { scriptLoadAsync(script) }
-    def scriptKillAsync() = r.send(ScriptKill()).map(okResultAsBoolean)
-    def scriptKill() = await { scriptKillAsync() }
-    def scriptFlushAsync() = r.send(ScriptFlush()).map(okResultAsBoolean)
-    def scriptFlush() = await { scriptFlushAsync() }
-    def scriptExistsAsync(script: String) = r.send(ScriptExists(script)).map(okResultAsBoolean)
-    def scriptExists(script: String) = await { scriptExistsAsync(script) }
-    */
+ def testKeys() {
+    c.set("prefix:1" -> 1, "prefix:2" -> 2)
+    assertEquals(Set("prefix:1", "prefix:2"), c.keys("prefix:*"))
+    c.del("prefix:1")
+    c.del("prefix:2")
+  }
 
+
+  def testTransactions() {
+    c.withTransaction { cli =>
+      cli.setAsync("tx_key", "tx_val")
+    }
   }
 
 

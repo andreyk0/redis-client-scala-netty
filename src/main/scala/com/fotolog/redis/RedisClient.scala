@@ -5,6 +5,13 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.{Future, Await}
 
 object RedisClient {
+
+  private final val timeout = Duration(1, TimeUnit.MINUTES)
+
+  implicit class RichFutureWrapper[T](val f: Future[T]) extends AnyVal {
+    def get() = Await.result[T](f, timeout)
+  }
+
   import scala.collection.{ Set => SCSet }
 
   def apply(): RedisClient = new RedisClient(new RedisConnection)
@@ -13,15 +20,18 @@ object RedisClient {
   private[redis] val integerResultAsBoolean: PartialFunction[Result, Boolean] = {
     case BulkDataResult(Some(v)) => BinaryConverter.IntConverter.read(v) > 0
     case BulkDataResult(None) => throw new RuntimeException("Unknown integer type")
+    case SingleLineResult("QUEUED") => throw new RuntimeException("Should not be read")
   }
 
   private[redis] val okResultAsBoolean: PartialFunction[Result, Boolean] = {
     case SingleLineResult("OK") => true
+    case SingleLineResult("QUEUED") => throw new RuntimeException("Should not be read")
     // for cases where any other val should produce an error
   }
 
   private[redis] val integerResultAsInt: PartialFunction[Result, Int] = {
     case BulkDataResult(Some(v)) => BinaryConverter.IntConverter.read(v)
+    case SingleLineResult("QUEUED") => throw new RuntimeException("Should not be read")
   }
 
   private[redis] def bulkDataResultToOpt[T](convert: BinaryConverter[T]): PartialFunction[Result, Option[T]] = {
@@ -80,8 +90,6 @@ class RedisClient(val r: RedisConnection) {
 
   import scala.collection.{ Set => SCSet }
 
-  private[this] final val timeout = Duration(1, TimeUnit.MINUTES)
-
   def isConnected: Boolean = r.isOpen
   def shutdown() { r.shutdown() }
 
@@ -110,11 +118,16 @@ class RedisClient(val r: RedisConnection) {
 
   def keytype(key: String): KeyType = await(keytypeAsync(key))
 
+  def keysAsync(pattern: String): Future[SCSet[String]] =
+    r.send(Keys(pattern)).map(multiBulkDataResultToSet(BinaryConverter.StringConverter))
+
+  def keys(pattern: String) = await(keysAsync(pattern))
+
   def existsAsync(key: String): Future[Boolean] = r.send(Exists(key)).map(integerResultAsBoolean)
   def exists(key: String): Boolean = await(existsAsync(key))
 
   def setAsync[T](key: String, value: T)(implicit conv:BinaryConverter[T]): Future[Boolean] =
-    r.send(Set(key, conv.write(value))).map(okResultAsBoolean)
+    r.send(SetCmd(key, conv.write(value))).map(okResultAsBoolean)
 
   def set[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Boolean = await { setAsync(key, value)(conv) }
 
@@ -410,5 +423,26 @@ class RedisClient(val r: RedisConnection) {
 
   def scriptExists(script: String) = await { scriptExistsAsync(script) }
 
-  def await[T](f: Future[T]) = Await.result[T](f, timeout)
+  def multiAsync() = r.send(Multi()).map(okResultAsBoolean)
+
+  def execAsync() = r.send(Exec()).map(multiBulkDataResultToSet(BinaryConverter.StringConverter))
+
+  def discardAsync() = r.send(Discard())
+
+  def withTransaction(block: RedisClient => Unit) = {
+    multiAsync()
+    try {
+      block(this)
+      execAsync()
+    } catch {
+      case e: Exception => discardAsync()
+      throw e
+    }
+  }
+
+  def watchAsync(keys: String*) = r.send(Watch(keys:_*))
+
+  def unwatchAsync() = r.send(Unwatch())
+
+  def await[T](f: Future[T]) = Await.result[T](f, RedisClient.timeout)
 }
