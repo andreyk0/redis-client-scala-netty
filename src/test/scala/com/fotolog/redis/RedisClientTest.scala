@@ -4,7 +4,6 @@ import junit.framework.TestCase
 
 import org.junit._
 import Assert._
-
 import RedisClient._
 
 class RedisClientTest extends TestCase {
