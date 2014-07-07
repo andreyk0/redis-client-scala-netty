@@ -3,17 +3,17 @@ package com.fotolog.redis
 import junit.framework.TestCase
 
 import org.junit._
-import Assert._
+import org.junit.Assert._
 import RedisClient._
 
 class RedisClientTest extends TestCase {
   val c = RedisClient("localhost", 6379) // non-default port, just in case as this wipes out all data
 
-  override def setUp() = super.setUp; c.flushall
+  override def setUp() = c.flushall
   override def tearDown() = c.flushall
 
   def testPingGetSetExistsType() {
-    assertTrue(c.ping)
+    assertTrue(c.ping())
     assertFalse(c.exists("foo"))
     assertTrue(c.set("foo", 1, "bar"))
     assertTrue(c.exists("foo"))
@@ -135,35 +135,32 @@ class RedisClientTest extends TestCase {
 
   def testSets() {
     import scala.collection.{ Set => SCSet }
-    assertTrue(c.sadd("set1", "foo"))
-    assertFalse(c.sadd("set1", "foo"))
+    assertEquals(1, c.sadd("set1", "foo"))
+    assertEquals(0, c.sadd("set1", "foo"))
     assertTrue(c.srem("set1", "foo"))
     assertFalse(c.srem("set1", "foo"))
 
-    assertTrue(c.sadd("set1", "foo"))
+    assertEquals(1, c.sadd("set1", "foo"))
     assertEquals(Option("foo"), c.spop[String]("set1"))
     assertFalse(c.srem("set1", "foo"))
 
-
-    assertTrue(c.sadd("set1", "foo"))
+    assertEquals(1, c.sadd("set1", "foo"))
     assertTrue(c.smove("set1", "set2", "foo"))
     assertEquals(None, c.spop[String]("set1"))
     assertEquals(Option("foo"), c.spop[String]("set2"))
 
     assertEquals(0, c.scard("set1"))
-    assertTrue(c.sadd("set1", "foo"))
+    assertEquals(1, c.sadd("set1", "foo"))
     assertEquals(1, c.scard("set1"))
-    assertTrue(c.sadd("set1", "bar"))
+    assertEquals(1, c.sadd("set1", "bar"))
     assertEquals(2, c.scard("set1"))
 
     assertTrue(c.sismember("set1", "foo"))
     assertTrue(c.sismember("set1", "bar"))
     assertFalse(c.sismember("set1", "boo"))
 
-    assertTrue(c.sadd("set1", "baz"))
-    assertTrue(c.sadd("set2", "foo"))
-    assertTrue(c.sadd("set2", "bar"))
-    assertTrue(c.sadd("set2", "blah"))
+    assertEquals(1, c.sadd("set1", "baz"))
+    assertEquals(3, c.sadd("set2", "foo", "bar", "blah"))
 
     assertEquals(SCSet("foo", "bar", "baz"), c.smembers[String]("set1"))
     assertEquals(SCSet("foo", "bar", "blah"), c.smembers[String]("set2"))

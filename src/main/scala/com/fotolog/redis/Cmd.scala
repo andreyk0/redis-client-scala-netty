@@ -267,8 +267,8 @@ case class Hgetall(key: String) extends Cmd {
 }
 
 // sets
-case class Sadd(kv: KV) extends Cmd {
-  def asBin = Seq(SADD, kv._1.getBytes(charset), kv._2)
+case class Sadd(key: String, values: BinVal*) extends Cmd {
+  def asBin = Seq(SADD, key.getBytes(charset)) ++ values
 }
 
 case class Srem(kv: KV) extends Cmd {

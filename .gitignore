@@ -3,3 +3,4 @@
 *.ipr
 reports
 target
+.idea

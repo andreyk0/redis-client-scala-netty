@@ -322,10 +322,10 @@ class RedisClient(val r: RedisConnection) {
 
   def hgetall[T](key: String)(implicit conv: BinaryConverter[T]): Map[String,T] = await { hgetallAsync(key)(conv) }
 
-  def saddAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(Sadd(key -> conv.write(value))).map(integerResultAsBoolean)
+  def saddAsync[T](key: String, values: T*)(implicit conv: BinaryConverter[T]): Future[Int] =
+    r.send(Sadd(key, values.map(conv.write):_*)).map(integerResultAsInt)
 
-  def sadd[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Boolean = await { saddAsync(key,value)(conv) }
+  def sadd[T](key: String, values: T*)(implicit conv: BinaryConverter[T]): Int = await { saddAsync(key, values:_*)(conv) }
 
   def sremAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
     r.send(Srem(key -> conv.write(value))).map(integerResultAsBoolean)
