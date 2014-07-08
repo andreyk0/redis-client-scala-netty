@@ -207,6 +207,9 @@ class RedisClient(val r: RedisConnection) {
   def persistAsync(key: String): Future[Boolean] = r.send(Persist(key)).map(integerResultAsBoolean)
   def persist(key: String): Boolean = await { persistAsync(key) }
 
+  def ttlAsync(key: String): Future[Int] = r.send(Ttl(key)).map(integerResultAsInt)
+  def ttl(key: String): Int = await { ttlAsync(key) }
+
   def rpushAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Int] =
     r.send(Rpush(key, conv.write(value))).map(integerResultAsInt)
 

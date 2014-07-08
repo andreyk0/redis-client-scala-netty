@@ -17,6 +17,7 @@ private[redis] object Cmd {
   val EX = "EX".getBytes
   val NX = "NX".getBytes
   val KEYS = "KEYS".getBytes
+  val TTL = "TTL".getBytes
 
   val MSET = "MSET".getBytes
   val GETSET = "GETSET".getBytes
@@ -171,6 +172,10 @@ case class Expire(key: String, seconds: Int) extends Cmd {
 
 case class Persist(key: String) extends Cmd {
   def asBin = Seq(PERSIST, key.getBytes(charset))
+}
+
+case class Ttl(key: String) extends Cmd {
+  def asBin = Seq(TTL, key.getBytes(charset))
 }
 
 case class Keys(pattern: String) extends Cmd {

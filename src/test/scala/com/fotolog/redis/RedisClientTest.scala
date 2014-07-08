@@ -5,6 +5,8 @@ import junit.framework.TestCase
 import org.junit._
 import org.junit.Assert._
 import RedisClient._
+import scala.Some
+import scala.Some
 
 class RedisClientTest extends TestCase {
   val c = RedisClient("localhost", 6379) // non-default port, just in case as this wipes out all data
@@ -22,6 +24,7 @@ class RedisClientTest extends TestCase {
     assertTrue(c.del("foo"))
     assertFalse(c.exists("foo"))
     assertFalse(c.del("foo"))
+    assertEquals(-2, c.ttl("foo"))
   }
 
   def testMgetMset() {
@@ -79,7 +82,10 @@ class RedisClientTest extends TestCase {
   def testExpirePersist() {
     assertTrue(c.set("foo", "bar"))
     assertTrue(c.expire("foo", 100))
+    assertEquals(100, c.ttl("foo"))
     assertTrue(c.persist("foo")) // depends on the version of redis
+    assertEquals(-1, c.ttl("foo"))
+    assertEquals(-2, c.ttl("somekey"))
   }
 
   def testLists() {
