@@ -6,11 +6,11 @@
 
     <groupId>com.redis</groupId>
     <artifactId>redis-scala-netty</artifactId>
-    <version>1.1.6</version>
+    <version>1.1.7</version>
     <packaging>jar</packaging>
 
     <properties>
-        <scala.version>2.11.0</scala.version>
+        <scala.version>2.11.5</scala.version>
     </properties>
 
     <dependencies>
@@ -29,13 +29,14 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty</artifactId>
-            <version>3.7.0.Final</version>
+            <version>3.9.3.Final</version>
         </dependency>
 
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.11</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
