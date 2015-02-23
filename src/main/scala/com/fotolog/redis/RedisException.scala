@@ -9,3 +9,4 @@ package com.fotolog.redis
 class RedisException(msg: String) extends Exception(msg)
 
 case class ScriptSyntaxException(msg: String) extends RedisException(msg)
+case class UnsupportedResponseException(msg: String) extends RedisException(msg)

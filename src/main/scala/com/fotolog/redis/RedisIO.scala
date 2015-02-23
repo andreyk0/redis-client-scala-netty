@@ -14,15 +14,12 @@ import org.jboss.netty.channel.ChannelHandler.Sharable
 import org.jboss.netty.handler.codec.oneone.OneToOneEncoder
 import java.nio.charset.Charset
 
-import RedisClientTypes._
-
 sealed abstract class Result
 case class ErrorResult(err: String) extends Result
 case class SingleLineResult(msg: String) extends Result
-case class BulkDataResult(data: Option[BinVal]) extends Result {
-    override def toString = {
+case class BulkDataResult(data: Option[Array[Byte]]) extends Result {
+    override def toString =
         "BulkDataResult(%s)".format({ data match { case Some(barr) => new String(barr); case None => "" } })
-    }
 }
 case class MultiBulkDataResult(results: Seq[BulkDataResult]) extends Result
 
@@ -33,36 +30,39 @@ case class ResultFuture(cmd: Cmd) {
 
 
 object RedisConnection {
-  private[redis] type OpQueue = ArrayBlockingQueue[ResultFuture]
 
   private[redis] val executor = Executors.newCachedThreadPool()
   private[redis] val channelFactory = new NioClientSocketChannelFactory(executor, executor)
   private[redis] val commandEncoder = new RedisCommandEncoder() // stateless
-  private[redis] val cmdQueue = new ArrayBlockingQueue[Pair[RedisConnection, ResultFuture]](2048)
+  private[redis] val cmdQueue = new ArrayBlockingQueue[(RedisConnection, ResultFuture)](2048)
 
-  scala.actors.Actor.actor { 
-    while(true) {
-      val (conn, f) = cmdQueue.take()
-      try {
-        if (conn.isOpen) {
-          conn.enqueue(f)
-        } else {
-          f.promise.failure(new IllegalStateException("Channel closed, command: " + f.cmd))
+  private[redis] val queueProcessor = new Runnable {
+    override def run() = {
+      while(true) {
+        val (conn, f) = cmdQueue.take()
+        try {
+          if (conn.isOpen) {
+            conn.enqueue(f)
+          } else {
+            f.promise.failure(new IllegalStateException("Channel closed, command: " + f.cmd))
+          }
+        } catch {
+          case e: Exception => f.promise.failure(e); conn.shutdown()
         }
-      } catch {
-        case e: Exception => f.promise.failure(e); conn.shutdown()
       }
     }
   }
+
+  new Thread(queueProcessor).start()
 }
 
-class RedisConnection(val host: String = "localhost", val port: Int = 6379) {
+class RedisConnection(val host: String, val port: Int) {
 
   import RedisConnection._
 
   private[RedisConnection] var isRunning = true
   private[RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
-  private[RedisConnection] val opQueue = new OpQueue(128)
+  private[RedisConnection] val opQueue = new ArrayBlockingQueue[ResultFuture](128)
 
   clientBootstrap.setPipelineFactory(new ChannelPipelineFactory() {
       override def getPipeline = {
@@ -125,8 +125,8 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
     binaryCmd(opFuture.cmd.asBin)
   }
 
-  private def binaryCmd(cmdParts: Seq[BinVal]): ChannelBuffer = {
-    val params = new Array[BinVal](3*cmdParts.length + 1)
+  private def binaryCmd(cmdParts: Seq[Array[Byte]]): ChannelBuffer = {
+    val params = new Array[Array[Byte]](3*cmdParts.length + 1)
     params(0) = ("*" + cmdParts.length + "\r\n").getBytes // num binary chunks
     var i = 1
     for(p <- cmdParts) {
@@ -221,7 +221,7 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
   }
 }
 
-private[redis] class RedisResponseAccumulator(opQueue: RedisConnection.OpQueue) extends SimpleChannelHandler with ChannelExceptionHandler {
+private[redis] class RedisResponseAccumulator(opQueue: ArrayBlockingQueue[ResultFuture]) extends SimpleChannelHandler with ChannelExceptionHandler {
   import scala.collection.mutable.ArrayBuffer
 
   val bulkDataBuffer = ArrayBuffer[BulkDataResult]()
@@ -259,29 +259,31 @@ private[redis] class RedisResponseAccumulator(opQueue: RedisConnection.OpQueue) 
 
   private def handleDataChunk(bulkData: ChannelBuffer) {
     val chunk = bulkData match {
-      case null => BULK_NONE
-      case buf => {
+      case null =>
+        BULK_NONE
+      case buf =>
         if(buf.readable) {
-          val bytes = new BinVal(buf.readableBytes())
+          val bytes = new Array[Byte](buf.readableBytes())
           buf.readBytes(bytes)
           BulkDataResult(Some(bytes))
         } else BulkDataResult(None)
-      }
     }
 
     numDataChunks match {
-      case 0 => success(chunk)
-      case 1 => {
+      case 0 =>
+        success(chunk)
+
+      case 1 =>
         bulkDataBuffer += chunk
         val allChunks = new Array[BulkDataResult](bulkDataBuffer.length)
         bulkDataBuffer.copyToArray(allChunks)
         clear()
         success(MultiBulkDataResult(allChunks))
-      }
-      case _ => {
+
+      case _ =>
         bulkDataBuffer += chunk
         numDataChunks  = numDataChunks - 1
-      }
+
     }
   }
 

@@ -1,6 +1,5 @@
 package com.fotolog.redis
 
-import RedisClientTypes._
 import java.nio.charset.Charset
 
 private[redis] object Cmd {
@@ -99,7 +98,7 @@ private[redis] object Cmd {
 
 import Cmd._
 sealed abstract class Cmd {
-  def asBin: Seq[BinVal]
+  def asBin: Seq[Array[Byte]]
 }
 
 case class Exists(key: String) extends Cmd {
@@ -124,27 +123,27 @@ case class MGet(keys: String*) extends Cmd {
   def asBin = MGET :: keys.toList.map(_.getBytes(charset))
 }
 
-case class SetCmd(key: String, v: BinVal) extends Cmd {
+case class SetCmd(key: String, v: Array[Byte]) extends Cmd {
   def asBin = Seq(SET, key.getBytes(charset), v)
 }
 
-case class MSet(kvs: KV*) extends Cmd {
+case class MSet(kvs: (String, Array[Byte])*) extends Cmd {
   def asBin = MSET :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
-case class SetNx(kvs: KV*) extends Cmd {
+case class SetNx(kvs: (String, Array[Byte])*) extends Cmd {
   def asBin = MSETNX :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
-case class GetSet(kv: KV) extends Cmd {
-  def asBin = Seq(GETSET, kv._1.getBytes(charset), kv._2)
+case class GetSet(key: String, v: Array[Byte]) extends Cmd {
+  def asBin = Seq(GETSET, key.getBytes(charset), v)
 }
 
-case class SetEx(key: String, expTime: Int, value: BinVal) extends Cmd {
+case class SetEx(key: String, expTime: Int, value: Array[Byte]) extends Cmd {
   def asBin = Seq(SETEX, key.getBytes(charset), expTime.toString.getBytes, value)
 }
 
-case class SetExNx(key: String, expTime: Int, value: BinVal) extends Cmd {
+case class SetExNx(key: String, expTime: Int, value: Array[Byte]) extends Cmd {
   def asBin = Seq(SET, key.getBytes(charset), NX, EX, expTime.toString.getBytes, value)
 }
 
@@ -158,8 +157,8 @@ case class Decr(key: String, delta: Int = 1) extends Cmd {
     else Seq(DECRBY, key.getBytes(charset), delta.toString.getBytes)
 }
 
-case class Append(kv: KV) extends Cmd {
-  def asBin = Seq(APPEND, kv._1.getBytes(charset), kv._2)
+case class Append(key: String, v: Array[Byte]) extends Cmd {
+  def asBin = Seq(APPEND, key.getBytes(charset), v)
 }
 
 case class Substr(key: String, startOffset: Int, endOffset: Int) extends Cmd {
@@ -183,12 +182,12 @@ case class Keys(pattern: String) extends Cmd {
 }
 
 // lists
-case class Rpush(kv: KV) extends Cmd {
-  def asBin = Seq(RPUSH, kv._1.getBytes(charset), kv._2)
+case class Rpush(key: String, v: Array[Byte]) extends Cmd {
+  def asBin = Seq(RPUSH, key.getBytes(charset), v)
 }
 
-case class Lpush(kv: KV) extends Cmd {
-  def asBin = Seq(LPUSH, kv._1.getBytes(charset), kv._2)
+case class Lpush(key: String, v: Array[Byte]) extends Cmd {
+  def asBin = Seq(LPUSH, key.getBytes(charset), v)
 }
 
 case class Llen(key: String) extends Cmd {
@@ -207,11 +206,11 @@ case class Lindex(key: String, idx: Int) extends Cmd {
   def asBin = Seq(LINDEX, key.getBytes(charset), idx.toString.getBytes)
 }
 
-case class Lset(key: String, idx: Int, value: BinVal) extends Cmd {
+case class Lset(key: String, idx: Int, value: Array[Byte]) extends Cmd {
   def asBin = Seq(LSET, key.getBytes(charset), idx.toString.getBytes, value)
 }
 
-case class Lrem(key: String, count: Int, value: BinVal) extends Cmd {
+case class Lrem(key: String, count: Int, value: Array[Byte]) extends Cmd {
   def asBin = Seq(LREM, key.getBytes(charset), count.toString.getBytes, value)
 }
 
@@ -227,7 +226,7 @@ case class RpopLpush(srcKey: String, destKey: String) extends Cmd {
 }
 
 // hashes
-case class Hset(key: String, field: String, value: BinVal) extends Cmd {
+case class Hset(key: String, field: String, value: Array[Byte]) extends Cmd {
   def asBin = Seq(HSET, key.getBytes(charset), field.getBytes(charset), value)
 }
 
@@ -239,7 +238,7 @@ case class Hmget(key: String, fields: String*) extends Cmd {
   def asBin = Seq(HMGET :: key.getBytes(charset) :: fields.toList.map{_.getBytes(charset)}: _*)
 }
 
-case class Hmset(key:String, kvs: KV*) extends Cmd {
+case class Hmset(key:String, kvs: (String, Array[Byte])*) extends Cmd {
   def asBin = Seq(HMSET :: key.getBytes :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
 }
 
@@ -272,27 +271,27 @@ case class Hgetall(key: String) extends Cmd {
 }
 
 // sets
-case class Sadd(key: String, values: BinVal*) extends Cmd {
+case class Sadd(key: String, values: Array[Byte]*) extends Cmd {
   def asBin = Seq(SADD, key.getBytes(charset)) ++ values
 }
 
-case class Srem(kv: KV) extends Cmd {
-  def asBin = Seq(SREM, kv._1.getBytes(charset), kv._2)
+case class Srem(key: String, v: Array[Byte]) extends Cmd {
+  def asBin = Seq(SREM, key.getBytes(charset), v)
 }
 
 case class Spop(key: String) extends Cmd {
   def asBin = Seq(SPOP, key.getBytes(charset))
 }
 
-case class Smove(srcKey: String, destKey: String, value: BinVal) extends Cmd {
+case class Smove(srcKey: String, destKey: String, value: Array[Byte]) extends Cmd {
   def asBin = Seq(SMOVE, srcKey.getBytes(charset), destKey.getBytes(charset), value)
 }
 
 case class Scard(key: String) extends Cmd {
   def asBin = Seq(SCARD, key.getBytes(charset))
 }
-case class Sismember(kv: KV) extends Cmd  {
-  def asBin = Seq(SISMEMBER, kv._1.getBytes(charset), kv._2)
+case class Sismember(key: String, v: Array[Byte]) extends Cmd  {
+  def asBin = Seq(SISMEMBER, key.getBytes(charset), v)
 }
 
 case class Sinter(keys: String*) extends Cmd {
@@ -328,11 +327,11 @@ case class Srandmember(key: String) extends Cmd {
 }
 
 // scripting
-case class Eval(script: String, kv: KV*) extends Cmd {
+case class Eval(script: String, kv: (String, Array[Byte])*) extends Cmd {
   def asBin = EVAL :: script.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.map{ kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
-case class EvalSha(digest: String, kv: KV*) extends Cmd {
+case class EvalSha(digest: String, kv: (String, Array[Byte])*) extends Cmd {
   def asBin = EVALSHA :: digest.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.map{ kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
