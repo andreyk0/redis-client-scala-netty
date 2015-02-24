@@ -11,6 +11,10 @@ object RedisClient {
 
   private final val DEFAULT_TIMEOUT = Duration(1, TimeUnit.MINUTES)
 
+  implicit class RichFutureWrapper[T](val f: Future[T]) extends AnyVal {
+    def get() = Await.result[T](f, DEFAULT_TIMEOUT)
+  }
+
   def apply(host: String = "localhost", port: Int = 6379, timeout: Duration = DEFAULT_TIMEOUT) =
     if(host.startsWith("mem:")) {
       new RedisClient(new InMemoryRedisConnection(host.substring("mem:".length)), timeout)

@@ -14,6 +14,29 @@ sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.Stri
 
 object InMemoryRedisConnection {
   val fakeServers = new ConcurrentHashMap[String, ConcurrentHashMap[String, Data]]
+
+  private[redis] val cleaner = new Runnable {
+    override def run() = {
+      while(true) {
+        val servers = fakeServers.elements()
+
+        while(servers.hasMoreElements) {
+          val map = servers.nextElement()
+
+          val it = map.entrySet.iterator
+          while (it.hasNext) {
+            if(it.next.getValue.expired) it.remove()
+          }
+        }
+
+        Thread.sleep(1000)
+      }
+    }
+  }
+
+  private[this] val t = new Thread(cleaner)
+  t.setDaemon(true)
+  t.start()
 }
 
 /**
@@ -41,6 +64,9 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       BulkDataResult(
         Option(map.get(key)) filterNot(_.expired) map (_.asBytes)
       )
+
+    case Expire(key, seconds) =>
+      int2res(Option(map.get(key)) map { d => map.put(key, d.copy(ttl = seconds)); 1 } getOrElse(0))
 
     case Exists(key) =>
       if(map.containsKey(key)) 1 else 0

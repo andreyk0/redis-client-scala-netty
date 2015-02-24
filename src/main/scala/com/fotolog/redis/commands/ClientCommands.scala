@@ -22,6 +22,7 @@ private[commands] object ClientCommands {
 
   val okResultAsBoolean: PartialFunction[Result, Boolean] = {
     case SingleLineResult("OK") => true
+    case BulkDataResult(None) => false
     case SingleLineResult("QUEUED") => throw new RuntimeException("Should not be read")
     // for cases where any other val should produce an error
   }

@@ -40,6 +40,11 @@ private[redis] trait StringCommands extends ClientCommands {
     setXxAsync(key, value, expTime)(conv)
   }
 
+  def setNxAsync[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
+    r.send(SetNx(kvs.map{kv => kv._1 -> conv.write(kv._2)} : _*)).map(integerResultAsBoolean)
+
+  def setNx[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { setNxAsync(kvs: _*)(conv) }
+
   def setAsync[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
     r.send(MSet(kvs.map { kv => kv._1 -> conv.write(kv._2)} : _*)).map(okResultAsBoolean)
 
@@ -61,23 +66,6 @@ private[redis] trait StringCommands extends ClientCommands {
     r.send( MGet(keys: _*)).map(multiBulkDataResultToMap(keys, conv))
 
   def mget[T](keys: String*)(implicit conv: BinaryConverter[T]): Map[String,T] = await { mgetAsync(keys: _*)(conv) }
-
-  def setnxAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(SetNx(key -> conv.write(value))).map(integerResultAsBoolean)
-
-  def setnxAsync[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(SetNx(kvs.map{kv => kv._1 -> conv.write(kv._2)} : _*)).map(integerResultAsBoolean)
-
-  def setnx[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Boolean =
-    await { setnxAsync(key, value)(conv) }
-
-  def setnxAsync[T](key: String, expiration: Int, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(SetNx(key -> conv.write(value))).map(integerResultAsBoolean)
-
-  def setnx[T](key: String, expiration: Int, value: T)(implicit conv: BinaryConverter[T]): Boolean =
-    await { setnxAsync(key, expiration, value)(conv) }
-
-  def setnx[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { setnxAsync(kvs: _*)(conv) }
 
   def getsetAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
     r.send(GetSet(key, conv.write(value) )).map(bulkDataResultToOpt(conv))

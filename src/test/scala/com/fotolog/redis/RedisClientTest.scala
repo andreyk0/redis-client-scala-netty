@@ -37,17 +37,18 @@ class RedisClientTest extends TestCase {
   }
 
   def testSetNxEx() {
-    assertTrue(c.setnx("blah", "blah"))
-    assertFalse(c.setnx("blah", "boo"))
+    assertTrue(c.setNx("blah", "blah"))
+    assertFalse(c.setNx("blah", "boo"))
 
-    assertTrue(c.setnx("foobar" -> "foo2"))
-    assertTrue(c.setnx("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1"))
+    assertTrue(c.setNx("foobar" -> "foo2"))
 
-    assertFalse(c.setnx("xxx" -> "yyy", "bar" -> "blah"))
+    assertTrue( c.setNx("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1") )
 
-    assertTrue(c.setnx("three", 100, "three"))
-    assertFalse(c.setnx("three", 10, "three"))
-    assertFalse(c.setnx("blah", 10, "blah"))
+    assertFalse(c.setNx("xxx" -> "yyy", "bar" -> "blah"))
+
+    assertTrue(c.setNx("three", "three", 100))
+    assertFalse(c.setNx("three", "three", 10))
+    assertFalse(c.setNx("blah", "blah", 10))
   }
 
   def testGetSet() {
