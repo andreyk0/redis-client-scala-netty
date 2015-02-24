@@ -1,6 +1,7 @@
 package com.fotolog.redis.commands
 
 import com.fotolog.redis._
+import com.fotolog.redis.connections._
 import scala.collection.Set
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -8,15 +9,16 @@ import scala.concurrent.Future
 /**
  * http://redis.io/commands#generic
  * http://redis.io/commands#connection
+ * http://redis.io/commands#transactions
  */
 private[redis] trait GenericCommands extends ClientCommands {
   self: RedisClient =>
 
   import ClientCommands._
 
-  def delAsync(key: String): Future[Boolean] = r.send(Del(key)).map(integerResultAsBoolean)
+  def delAsync(key: String): Future[Int] = r.send(Del(key)).map(integerResultAsInt)
 
-  def del(key: String): Boolean = await { delAsync(key) }
+  def del(key: String): Int = await { delAsync(key) }
 
   def existsAsync(key: String): Future[Boolean] = r.send(Exists(key)).map(integerResultAsBoolean)
   def exists(key: String): Boolean = await(existsAsync(key))

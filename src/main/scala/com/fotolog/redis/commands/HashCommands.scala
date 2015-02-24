@@ -1,6 +1,7 @@
 package com.fotolog.redis.commands
 
 import com.fotolog.redis._
+import com.fotolog.redis.connections._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future

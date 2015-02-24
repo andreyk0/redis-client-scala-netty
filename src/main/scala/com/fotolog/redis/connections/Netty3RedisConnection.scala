@@ -1,40 +1,27 @@
-package com.fotolog.redis
+package com.fotolog.redis.connections
 
-
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
-import org.jboss.netty.channel._
-import org.jboss.netty.buffer._
-import org.jboss.netty.bootstrap.ClientBootstrap
-import org.jboss.netty.handler.codec.frame.FrameDecoder
 import java.net.InetSocketAddress
-import scala.concurrent.{Await, Future, Promise}
-import java.util.concurrent.{TimeUnit, Executors, ArrayBlockingQueue}
-import scala.concurrent.duration.Duration
-import org.jboss.netty.channel.ChannelHandler.Sharable
-import org.jboss.netty.handler.codec.oneone.OneToOneEncoder
 import java.nio.charset.Charset
+import java.util.concurrent.{ArrayBlockingQueue, Executors, TimeUnit}
 
-sealed abstract class Result
-case class ErrorResult(err: String) extends Result
-case class SingleLineResult(msg: String) extends Result
-case class BulkDataResult(data: Option[Array[Byte]]) extends Result {
-    override def toString =
-        "BulkDataResult(%s)".format({ data match { case Some(barr) => new String(barr); case None => "" } })
-}
-case class MultiBulkDataResult(results: Seq[BulkDataResult]) extends Result
+import com.fotolog.redis._
+import org.jboss.netty.bootstrap.ClientBootstrap
+import org.jboss.netty.buffer._
+import org.jboss.netty.channel.ChannelHandler.Sharable
+import org.jboss.netty.channel._
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
+import org.jboss.netty.handler.codec.frame.FrameDecoder
+import org.jboss.netty.handler.codec.oneone.OneToOneEncoder
 
-case class ResultFuture(cmd: Cmd) {
-  val promise = Promise[Result]()
-  def future = promise.future
-}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
-
-object RedisConnection {
+object Netty3RedisConnection {
 
   private[redis] val executor = Executors.newCachedThreadPool()
   private[redis] val channelFactory = new NioClientSocketChannelFactory(executor, executor)
   private[redis] val commandEncoder = new RedisCommandEncoder() // stateless
-  private[redis] val cmdQueue = new ArrayBlockingQueue[(RedisConnection, ResultFuture)](2048)
+  private[redis] val cmdQueue = new ArrayBlockingQueue[(Netty3RedisConnection, ResultFuture)](2048)
 
   private[redis] val queueProcessor = new Runnable {
     override def run() = {
@@ -56,13 +43,13 @@ object RedisConnection {
   new Thread(queueProcessor).start()
 }
 
-class RedisConnection(val host: String, val port: Int) {
+class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnection {
 
-  import RedisConnection._
+  import com.fotolog.redis.connections.Netty3RedisConnection._
 
-  private[RedisConnection] var isRunning = true
-  private[RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
-  private[RedisConnection] val opQueue = new ArrayBlockingQueue[ResultFuture](128)
+  private[Netty3RedisConnection] var isRunning = true
+  private[Netty3RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
+  private[Netty3RedisConnection] val opQueue = new ArrayBlockingQueue[ResultFuture](128)
 
   clientBootstrap.setPipelineFactory(new ChannelPipelineFactory() {
       override def getPipeline = {
@@ -78,7 +65,7 @@ class RedisConnection(val host: String, val port: Int) {
   clientBootstrap.setOption("keepAlive", true)
   clientBootstrap.setOption("connectTimeoutMillis", 1000)
 
-  private[RedisConnection] val channel = {
+  private[Netty3RedisConnection] val channel = {
       val future = clientBootstrap.connect(new InetSocketAddress(host, port))
       future.await(1, TimeUnit.MINUTES)
       if (future.isSuccess) {
@@ -117,8 +104,8 @@ class RedisConnection(val host: String, val port: Int) {
 
 @Sharable
 private[redis] class RedisCommandEncoder extends OneToOneEncoder {
-  import org.jboss.netty.buffer.ChannelBuffers._
   import Cmd._
+  import org.jboss.netty.buffer.ChannelBuffers._
 
   override def encode(ctx: ChannelHandlerContext, channel: Channel, msg: AnyRef): AnyRef = {
     val opFuture = msg.asInstanceOf[ResultFuture]

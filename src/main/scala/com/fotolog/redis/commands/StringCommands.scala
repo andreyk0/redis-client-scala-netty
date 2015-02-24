@@ -1,6 +1,7 @@
 package com.fotolog.redis.commands
 
 import com.fotolog.redis._
+import com.fotolog.redis.connections._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -18,22 +19,31 @@ private[redis] trait StringCommands extends ClientCommands {
   def decrAsync[T](key: String, delta: Int = 1): Future[Int] = r.send(Decr(key, delta)).map(integerResultAsInt)
   def decr[T](key: String, delta: Int = 1): Int = await { decrAsync(key, delta) }
 
-  def setAsync[T](key: String, value: T)(implicit conv:BinaryConverter[T]): Future[Boolean] =
-    r.send(SetCmd(key, conv.write(value))).map(okResultAsBoolean)
+  def setAsync[T](key: String, value: T, expTime: Int = -1)(implicit conv:BinaryConverter[T]): Future[Boolean] =
+    r.send(SetCmd(key, conv.write(value), expTime)).map(okResultAsBoolean)
 
-  def set[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Boolean = await { setAsync(key, value)(conv) }
+  def set[T](key: String, value: T, expTime: Int = -1)(implicit conv: BinaryConverter[T]): Boolean = await {
+    setAsync(key, value, expTime)(conv)
+  }
+
+  def setNxAsync[T](key: String, value: T, expTime: Int = -1)(implicit conv:BinaryConverter[T]): Future[Boolean] =
+    r.send(SetCmd(key, conv.write(value), expTime, true)).map(okResultAsBoolean)
+
+  def setNx[T](key: String, value: T, expTime: Int = -1)(implicit conv: BinaryConverter[T]): Boolean = await {
+    setNxAsync(key, value, expTime)(conv)
+  }
+
+  def setXxAsync[T](key: String, value: T, expTime: Int = -1)(implicit conv:BinaryConverter[T]): Future[Boolean] =
+    r.send(SetCmd(key, conv.write(value), expTime, false, true)).map(okResultAsBoolean)
+
+  def setXx[T](key: String, value: T, expTime: Int = -1)(implicit conv: BinaryConverter[T]): Boolean = await {
+    setXxAsync(key, value, expTime)(conv)
+  }
 
   def setAsync[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
     r.send(MSet(kvs.map { kv => kv._1 -> conv.write(kv._2)} : _*)).map(okResultAsBoolean)
 
   def set[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { setAsync(kvs: _*)(conv) }
-
-  def setAsync[T](key: String, expiration: Int, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(SetEx(key, expiration, conv.write(value))).map(okResultAsBoolean)
-
-  def set[T](key: String, expiration: Int, value: T)(implicit conv: BinaryConverter[T]): Boolean =
-    await{ setAsync(key, expiration, value)(conv) }
-
 
   def getAsync[T](key: String)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
     r.send(Get(key)).map(bulkDataResultToOpt(conv))
@@ -77,9 +87,9 @@ private[redis] trait StringCommands extends ClientCommands {
   def incrAsync[T](key: String, delta: Int = 1): Future[Int] = r.send(Incr(key, delta)).map(integerResultAsInt)
   def incr[T](key: String, delta: Int = 1): Int = await { incrAsync(key, delta) }
 
-  def substrAsync[T](key: String, startOffset: Int, endOffset: Int)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
-    r.send(Substr(key, startOffset, endOffset)).map(bulkDataResultToOpt(conv))
+  def getrangeAsync[T](key: String, startOffset: Int, endOffset: Int)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
+    r.send(Getrange(key, startOffset, endOffset)).map(bulkDataResultToOpt(conv))
 
   def substr[T](key: String, startOffset: Int, endOffset: Int)(implicit conv: BinaryConverter[T]): Option[T] =
-    await { substrAsync(key, startOffset, endOffset)(conv) }
+    await { getrangeAsync(key, startOffset, endOffset)(conv) }
 }

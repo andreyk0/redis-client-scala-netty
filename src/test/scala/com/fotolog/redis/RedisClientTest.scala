@@ -9,21 +9,22 @@ import scala.Some
 import scala.Some
 
 class RedisClientTest extends TestCase {
-  val c = RedisClient("localhost", 6379) // non-default port, just in case as this wipes out all data
+  val c = RedisClient("localhost", 6379)
 
   override def setUp() = c.flushall
   override def tearDown() = c.flushall
 
+
   def testPingGetSetExistsType() {
     assertTrue(c.ping())
     assertFalse(c.exists("foo"))
-    assertTrue(c.set("foo", 1, "bar"))
+    assertTrue(c.set("foo", "bar", 1))
     assertTrue(c.exists("foo"))
     assertEquals("bar", c.get[String]("foo").get)
     assertEquals(KeyType.String, c.keytype("foo"))
-    assertTrue(c.del("foo"))
+    assertEquals("One key has to be deleted", 1, c.del("foo"))
     assertFalse(c.exists("foo"))
-    assertFalse(c.del("foo"))
+    assertEquals("No keys has to be deleted", 0, c.del("foo"))
     assertEquals(-2, c.ttl("foo"))
   }
 
@@ -56,7 +57,7 @@ class RedisClientTest extends TestCase {
   }
 
   def testSetEx() {
-    assertTrue(c.set("foo", 123, "bar"))
+    assertTrue(c.set("foo", "bar", 123))
     assertEquals(Some("bar"), c.get[String]("foo"))
   }
 

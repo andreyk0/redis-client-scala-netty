@@ -1,6 +1,7 @@
 package com.fotolog.redis
 
 import com.fotolog.redis.commands._
+import com.fotolog.redis.connections.{RedisConnection, InMemoryRedisConnection, Netty3RedisConnection}
 
 import scala.concurrent.duration.Duration
 import java.util.concurrent.TimeUnit
@@ -11,7 +12,11 @@ object RedisClient {
   private final val DEFAULT_TIMEOUT = Duration(1, TimeUnit.MINUTES)
 
   def apply(host: String = "localhost", port: Int = 6379, timeout: Duration = DEFAULT_TIMEOUT) =
-    new RedisClient(new RedisConnection(host, port), timeout)
+    if(host.startsWith("mem:")) {
+      new RedisClient(new InMemoryRedisConnection(host.substring("mem:".length)), timeout)
+    } else {
+      new RedisClient(new Netty3RedisConnection(host, port), timeout)
+    }
 
 }
 
