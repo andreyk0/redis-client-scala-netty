@@ -9,7 +9,8 @@ import scala.concurrent.{Promise, Future}
 
 sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.String, stamp: Long = Platform.currentTime) {
   def asBytes = v.asInstanceOf[Array[Byte]]
-  def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000)
+  def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000L)
+  def secondsLeft = if (ttl == -1) -1 else (ttl - (Platform.currentTime - stamp) / 1000).toInt
 }
 
 object InMemoryRedisConnection {
@@ -51,10 +52,10 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
   private[this] def syncSend(cmd: Cmd): Result = cmd match {
     case set: SetCmd if set.nx =>
-        Option( map.putIfAbsent(set.key, Data(set.v, set.expTime)) ) map(_ => bulkNull) getOrElse(ok)
+        Option( map.putIfAbsent(set.key, Data(set.v, set.expTime)) ) map(_ => bulkNull) getOrElse ok
 
     case set: SetCmd if set.xx =>
-      Option( map.replace(set.key, Data(set.v, set.expTime)) ) map (_ => ok) getOrElse(bulkNull)
+      Option( map.replace(set.key, Data(set.v, set.expTime)) ) map (_ => ok) getOrElse bulkNull
 
     case set: SetCmd =>
       map.put(set.key, Data(set.v, set.expTime))
@@ -62,19 +63,22 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
     case Get(key) =>
       BulkDataResult(
-        Option(map.get(key)) filterNot(_.expired) map (_.asBytes)
+        optVal(key) filterNot(_.expired) map (_.asBytes)
       )
 
     case Expire(key, seconds) =>
-      int2res(Option(map.get(key)) map { d => map.put(key, d.copy(ttl = seconds)); 1 } getOrElse(0))
+      int2res(optVal(key) map { d => map.put(key, d.copy(ttl = seconds)); 1 } getOrElse(0))
 
     case Exists(key) =>
-      if(map.containsKey(key)) 1 else 0
+      if(optVal(key).exists(!_.expired)) 1 else 0
 
     case Type(key) =>
       SingleLineResult(
-        Option (map.get(key) ) map ( _.keyType.name ) getOrElse KeyType.None.name
+        optVal(key) map ( _.keyType.name ) getOrElse KeyType.None.name
       )
+
+    case Ttl(key) =>
+      int2res(optVal(key) map (_.secondsLeft) getOrElse -2)
 
     case d: Del =>
       d.keys.count(k => Option(map.remove(k)).isDefined)
@@ -90,6 +94,8 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
   private[this] val ok = SingleLineResult("OK")
   private[this] val bulkNull = BulkDataResult(None)
+
+  private[this] def optVal(key: String) = Option(map.get(key))
 
   override def isOpen: Boolean = true
 

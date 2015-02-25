@@ -15,7 +15,8 @@ class InMemoryClientTest extends TestCase {
 
   def testPingGetSetExistsType() {
     assertFalse(c.exists("foo"))
-    assertTrue(c.set("foo", "bar", 1))
+    assertTrue(c.set("foo", "bar", 2592000))
+
     assertTrue(c.exists("foo"))
 
     assertEquals("bar", c.get[String]("foo").get)
@@ -25,6 +26,16 @@ class InMemoryClientTest extends TestCase {
     assertFalse("Key should not exist", c.exists("foo"))
 
     assertEquals("No keys has to be deleted", 0, c.del("foo"))
-    //assertEquals(-2, c.ttl("foo"))
+  }
+
+  def testKeyTtl() {
+    assertTrue(c.set("foo", "bar", 5))
+    assertTrue(c.ttl("foo") <= 5)
+
+    assertTrue(c.set("baz", "foo"))
+
+    assertEquals("Ttl if not set should equal -1", -1, c.ttl("baz"))
+
+    assertEquals("Ttl of nonexistent entity has to be -2", -2, c.ttl("bar"))
   }
 }
