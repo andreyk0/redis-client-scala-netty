@@ -80,26 +80,27 @@ private[redis] object Cmd {
 
   // generic
   val DEL = "DEL".getBytes
-  val DUMP = "DUMP".getBytes
+  val DUMP = "DUMP".getBytes // not used
   val EXISTS = "EXISTS".getBytes
   val EXPIRE = "EXPIRE".getBytes
-  val EXPIREAT = "EXPIREAT".getBytes
+  val EXPIREAT = "EXPIREAT".getBytes // not used
   val KEYS = "KEYS".getBytes
-  val MIGRATE = "MIGRATE".getBytes
-  val MOVE = "MOVE".getBytes
-  val OBJECT = "OBJECT".getBytes
+  val MIGRATE = "MIGRATE".getBytes // not used
+  val MOVE = "MOVE".getBytes // not used
+  val OBJECT = "OBJECT".getBytes // not used
   val PERSIST = "PERSIST".getBytes
-  val PEXPIRE = "PEXPIRE".getBytes
-  val PEXPIREAT = "PEXPIREAT".getBytes
-  val PTTL = "PTTL".getBytes
-  val RANDOMKEY = "RANDOMKEY".getBytes
+  val PEXPIRE = "PEXPIRE".getBytes // not used
+  val PEXPIREAT = "PEXPIREAT".getBytes // not used
+  val PTTL = "PTTL".getBytes // not used
+  val RANDOMKEY = "RANDOMKEY".getBytes // not used
   val RENAME = "RENAME".getBytes
   val RENAMENX = "RENAMENX".getBytes
-  val RESTORE = "RESTORE".getBytes
+  val RESTORE = "RESTORE".getBytes // not used
+  val SCAN = "SCAN".getBytes // TODO:
   val SORT = "SORT".getBytes
   val TTL = "TTL".getBytes
   val TYPE = "TYPE".getBytes
-  val SCAN = "SCAN".getBytes
+
 
   // list
   val BLPOP = "BLPOP".getBytes
@@ -222,6 +223,10 @@ case class Del(keys: String*) extends Cmd {
   def asBin = if(keys.length > 1)
     DEL :: keys.toList.map(_.getBytes(charset))
   else Seq(DEL, keys.head.getBytes(charset))
+}
+
+case class Rename(key: String, newKey: String, nx: Boolean) extends Cmd {
+  def asBin = Seq(if(nx) RENAMENX else RENAME, key.getBytes(charset), newKey.getBytes(charset))
 }
 
 case class Get(key: String) extends Cmd {

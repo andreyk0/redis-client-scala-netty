@@ -41,6 +41,14 @@ private[redis] trait GenericCommands extends ClientCommands {
   def persistAsync(key: String): Future[Boolean] = r.send(Persist(key)).map(integerResultAsBoolean)
   def persist(key: String): Boolean = await { persistAsync(key) }
 
+  def renameAsync(key: String, newKey: String, notExist: Boolean = true) =
+    r.send(Rename(key, newKey, notExist)).map(integerResultAsBoolean)
+
+  def rename(key: String, newKey: String, notExist: Boolean = true) = await {
+    renameAsync(key, newKey, notExist)
+  }
+
+
   def ttlAsync(key: String): Future[Int] = r.send(Ttl(key)).map(integerResultAsInt)
   def ttl(key: String): Int = await { ttlAsync(key) }
 

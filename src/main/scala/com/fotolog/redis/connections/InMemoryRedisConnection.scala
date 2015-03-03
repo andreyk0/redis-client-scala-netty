@@ -1,5 +1,6 @@
 package com.fotolog.redis.connections
 
+import java.text.ParseException
 import java.util.concurrent.ConcurrentHashMap
 
 import com.fotolog.redis.KeyType
@@ -8,10 +9,26 @@ import scala.compat.Platform
 import scala.concurrent.{Promise, Future}
 
 sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.String, stamp: Long = Platform.currentTime) {
-  def asBytes = v.asInstanceOf[Array[Byte]]
+  def asBytes = keyType match {
+    case KeyType.String => v.asInstanceOf[Array[Byte]]
+    case _ => throw new DataException("illegal type")
+  }
+
+  def asMap = keyType match {
+    case KeyType.Hash => v.asInstanceOf[Map[String, Array[Byte]]]
+    case _ => throw new DataException("illegal type")
+  }
+
   def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000L)
   def secondsLeft = if (ttl == -1) -1 else (ttl - (Platform.currentTime - stamp) / 1000).toInt
 }
+
+private object Data {
+  def str(d: Array[Byte], ttl: Int = -1) = Data(d, ttl, keyType = KeyType.String)
+  def hash(map: Map[String, Array[Byte]], ttl: Int = -1) = Data(map, ttl, keyType = KeyType.Hash)
+}
+
+private case class DataException(msg: String) extends RuntimeException(msg)
 
 object InMemoryRedisConnection {
   val fakeServers = new ConcurrentHashMap[String, ConcurrentHashMap[String, Data]]
@@ -48,7 +65,16 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
   val map = InMemoryRedisConnection.fakeServers.get(dbName)
 
-  override def send(cmd: Cmd): Future[Result] = Promise.successful(syncSend(cmd)).future
+  override def send(cmd: Cmd): Future[Result] = {
+    val result = try {
+      syncSend(cmd)
+    } catch {
+      case dex: DataException =>
+        ErrorResult(dex.msg)
+    }
+
+    Promise.successful(result).future
+  }
 
   private[this] def syncSend(cmd: Cmd): Result = cmd match {
     case set: SetCmd if set.nx =>
@@ -83,6 +109,41 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     case d: Del =>
       d.keys.count(k => Option(map.remove(k)).isDefined)
 
+    // hcommands
+
+    case hmset: Hmset =>
+      map.put(hmset.key, Data.hash(Map(hmset.kvs:_*)))
+      ok
+
+    case hmget: Hmget =>
+      optVal(hmget.key).map {
+        _.asMap.filterKeys(hmget.fields.contains(_)).values.map( v => BulkDataResult(Some(v)) ) match {
+          case Seq(one) => one
+          case bulks: Seq[BulkDataResult] => MultiBulkDataResult(bulks)
+        }
+      } getOrElse bulkNull
+
+    case Hget(k, fld) =>
+      optVal(k) flatMap { _.asMap.get(fld).map( v => BulkDataResult(Some(v)) ) } getOrElse bulkNull
+
+    case h: Hincrby =>
+
+      val updatedMap = optVal(h.key).map { data =>
+        val m = data.asMap
+        val oldVal = m.get(h.field).map(bytes2int).getOrElse(0) + h.delta
+        m.updated(h.field, int2bytes(oldVal))
+      } getOrElse Map(h.field -> int2bytes(h.delta))
+
+      map.put(h.key, Data.hash(updatedMap))
+
+      int2res(bytes2int(updatedMap(h.field)))
+
+    case sadd: Sadd =>
+      throw DataException("not implemented")
+
+    case sisMember: Sismember =>
+      throw DataException("not implemented")
+
     case f: FlushAll =>
       map.clear()
       ok
@@ -91,6 +152,15 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   }
 
   private[this] implicit def int2res(v: Int): Result = BulkDataResult(Some(v.toString.getBytes))
+
+  private[this] def bytes2int(b: Array[Byte]) = try {
+    new String(b).toInt
+  } catch {
+    case p: ParseException =>
+      throw DataException("ERR hash value is not an integer")
+  }
+
+  private[this] def int2bytes(i: Int): Array[Byte] = i.toString.getBytes
 
   private[this] val ok = SingleLineResult("OK")
   private[this] val bulkNull = BulkDataResult(None)
