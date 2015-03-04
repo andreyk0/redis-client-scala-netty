@@ -19,6 +19,11 @@ sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.Stri
     case _ => throw new DataException("illegal type")
   }
 
+  def asSet = keyType match {
+    case KeyType.Set => v.asInstanceOf[Set[Array[Byte]]]
+    case _ => throw new DataException("illegal type")
+  }
+
   def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000L)
   def secondsLeft = if (ttl == -1) -1 else (ttl - (Platform.currentTime - stamp) / 1000).toInt
 }
@@ -26,6 +31,7 @@ sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.Stri
 private object Data {
   def str(d: Array[Byte], ttl: Int = -1) = Data(d, ttl, keyType = KeyType.String)
   def hash(map: Map[String, Array[Byte]], ttl: Int = -1) = Data(map, ttl, keyType = KeyType.Hash)
+  def set(set: Set[Array[Byte]], ttl: Int = -1) = Data(set, ttl, keyType = KeyType.Set)
 }
 
 private case class DataException(msg: String) extends RuntimeException(msg)
@@ -93,7 +99,7 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       )
 
     case Expire(key, seconds) =>
-      int2res(optVal(key) map { d => map.put(key, d.copy(ttl = seconds)); 1 } getOrElse(0))
+      int2res(optVal(key) map { d => map.put(key, d.copy(ttl = seconds)); 1 } getOrElse 0)
 
     case Exists(key) =>
       if(optVal(key).exists(!_.expired)) 1 else 0
@@ -109,7 +115,7 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     case d: Del =>
       d.keys.count(k => Option(map.remove(k)).isDefined)
 
-    // hcommands
+    // hash commands
 
     case hmset: Hmset =>
       map.put(hmset.key, Data.hash(Map(hmset.kvs:_*)))
@@ -137,6 +143,8 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       map.put(h.key, Data.hash(updatedMap))
 
       int2res(bytes2int(updatedMap(h.field)))
+
+    // set commands
 
     case sadd: Sadd =>
       throw DataException("not implemented")
