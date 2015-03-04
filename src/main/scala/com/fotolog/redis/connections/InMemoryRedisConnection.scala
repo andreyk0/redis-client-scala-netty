@@ -1,12 +1,14 @@
 package com.fotolog.redis.connections
 
+import java.nio.charset.Charset
 import java.text.ParseException
+import java.util
 import java.util.concurrent.ConcurrentHashMap
 
 import com.fotolog.redis.KeyType
 
 import scala.compat.Platform
-import scala.concurrent.{Promise, Future}
+import scala.concurrent.{Future, Promise}
 
 sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.String, stamp: Long = Platform.currentTime) {
   def asBytes = keyType match {
@@ -147,14 +149,36 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     // set commands
 
     case sadd: Sadd =>
-      throw DataException("not implemented")
+
+      val key = sadd.key
+
+      optVal(key).map { data =>
+
+        val sOld = data.asSet.map(DataWrapper)
+        val sNew = sadd.values.map(DataWrapper).filterNot(sOld).toSet
+        val result = (sOld ++ sNew).map(_.bytes)
+
+        map.put(key, Data.set(result))
+
+        int2res(sNew.size)
+
+      } getOrElse {
+        map.put(key, Data.set(Set(sadd.values:_*)))
+        int2res(sadd.values.length)
+      }
 
     case sisMember: Sismember =>
-      throw DataException("not implemented")
+
+      if (optVal(sisMember.key).map { x=> x.asSet.map(DataWrapper) }.map( _.contains(DataWrapper(sisMember.v)) ).getOrElse(false) ) {
+        1
+      } else {
+        0
+      }
 
     case f: FlushAll =>
       map.clear()
       ok
+
     case p: Ping => SingleLineResult("PONG")
 
   }
@@ -178,4 +202,34 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   override def isOpen: Boolean = true
 
   override def shutdown() {}
+}
+
+case class DataWrapper(bytes: Array[Byte]) {
+
+  override def hashCode(): Int = {
+    val prime= 31
+    var result = 1
+
+    result = prime * result + (if ((bytes == null)) 0 else bytes.hashCode())
+
+    result
+  }
+
+  override def equals(obj: scala.Any): Boolean = obj match {
+
+    case another: DataWrapper =>
+      util.Arrays.equals(bytes, another.bytes)
+
+    case obj: Object =>
+      false
+
+    case null =>
+      false
+  }
+
+
+  override def toString: String = {
+    val encode = new String(bytes, Charset.forName("UTF-8"))
+    s"DateWrapper: " + encode
+  }
 }

@@ -38,4 +38,13 @@ class InMemoryClientTest extends TestCase {
 
     assertEquals("Ttl of nonexistent entity has to be -2", -2, c.ttl("bar"))
   }
+
+  def testSet() {
+    assertEquals("Should return count of new elements - 2", 2, c.sadd("sport", "tennis", "hockey"))
+    assertEquals("Should return count of new elements - 1", 1, c.sadd("sport", "football"))
+    assertEquals("Should return count of new elements - 0", 0, c.sadd("sport", "hockey"))
+
+    assertEquals("Elements should exist", true, c.sismember("sport", "hockey"))
+    assertEquals("Elements should not exist", false, c.sismember("sport", "ski"))
+  }
 }
