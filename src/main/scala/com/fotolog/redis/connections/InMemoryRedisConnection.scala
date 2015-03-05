@@ -156,9 +156,10 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
         val sOld = data.asSet.map(DataWrapper)
         val sNew = sadd.values.map(DataWrapper).filterNot(sOld).toSet
-        val result = (sOld ++ sNew).map(_.bytes)
 
-        map.put(key, Data.set(result))
+        if (sNew.nonEmpty) {
+          map.put(key, Data.set((sOld ++ sNew).map(_.bytes)))
+        }
 
         int2res(sNew.size)
 
@@ -169,7 +170,7 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
     case sisMember: Sismember =>
 
-      if (optVal(sisMember.key).map { x=> x.asSet.map(DataWrapper) }.map( _.contains(DataWrapper(sisMember.v)) ).getOrElse(false) ) {
+      if ( optVal(sisMember.key).map { _.asSet.map(DataWrapper).contains(DataWrapper(sisMember.v)) }.getOrElse(false) ) {
         1
       } else {
         0

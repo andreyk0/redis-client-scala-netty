@@ -46,5 +46,6 @@ class InMemoryClientTest extends TestCase {
 
     assertEquals("Elements should exist", true, c.sismember("sport", "hockey"))
     assertEquals("Elements should not exist", false, c.sismember("sport", "ski"))
+    assertEquals("Key should not exist", false, c.sismember("drink", "ski"))
   }
 }
