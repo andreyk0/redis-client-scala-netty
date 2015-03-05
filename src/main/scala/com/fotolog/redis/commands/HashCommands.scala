@@ -10,7 +10,7 @@ import scala.concurrent.Future
  * http://redis.io/commands#hash
  */
 private[redis] trait HashCommands extends ClientCommands {
-  import ClientCommands._
+  import com.fotolog.redis.commands.ClientCommands._
 
   def hsetAsync[T](key: String, field: String, value: T)(implicit conv: BinaryConverter[T]): Future[Boolean] =
     r.send(Hset(key, field, conv.write(value))).map(integerResultAsBoolean)

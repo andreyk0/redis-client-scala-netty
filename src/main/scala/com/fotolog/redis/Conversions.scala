@@ -1,7 +1,8 @@
 package com.fotolog.redis
 
-import scala.annotation.implicitNotFound
 import java.nio.charset.Charset
+
+import scala.annotation.implicitNotFound
 
 @implicitNotFound(
   "No Converter found for type ${T}. Try to implement an implicit BinaryConverter for this type."

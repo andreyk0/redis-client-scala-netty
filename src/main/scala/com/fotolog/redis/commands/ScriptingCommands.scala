@@ -10,7 +10,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
  */
 private[redis] trait ScriptingCommands extends ClientCommands {
 
-  import ClientCommands._
+  import com.fotolog.redis.commands.ClientCommands._
 
   def evalAsync[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) =
     r.send(Eval(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(bulkResultToSet(conv))

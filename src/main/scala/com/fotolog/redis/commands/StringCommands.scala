@@ -2,6 +2,7 @@ package com.fotolog.redis.commands
 
 import com.fotolog.redis._
 import com.fotolog.redis.connections._
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -9,7 +10,7 @@ import scala.concurrent.Future
  * http://redis.io/commands#string
  */
 private[redis] trait StringCommands extends ClientCommands {
-  import ClientCommands._
+  import com.fotolog.redis.commands.ClientCommands._
 
   def appendAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Int] =
     r.send(Append(key, conv.write(value) )).map(integerResultAsInt)

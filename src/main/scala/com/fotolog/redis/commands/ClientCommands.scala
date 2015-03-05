@@ -37,17 +37,11 @@ private[commands] object ClientCommands {
   }
 
   def multiBulkDataResultToFilteredSeq[T](conv: BinaryConverter[T]): PartialFunction[Result, Seq[T]] = {
-    case MultiBulkDataResult(results) => results.filter {
-      case BulkDataResult(Some(_)) => true
-      case BulkDataResult(None) => false
-    }.map{ r => conv.read(r.data.get)}
+    case MultiBulkDataResult(results) => filterEmptyAndMap(results, conv)
   }
 
   def multiBulkDataResultToSet[T](conv: BinaryConverter[T]): PartialFunction[Result, Set[T]] = {
-    case MultiBulkDataResult(results) => results.filter {
-      case BulkDataResult(Some(_)) => true
-      case BulkDataResult(None) => false
-    }.map { r => conv.read(r.data.get) }.toSet
+    case MultiBulkDataResult(results) => filterEmptyAndMap(results, conv).toSet
   }
 
   def multiBulkDataResultToMap[T](keys: Seq[String], conv: BinaryConverter[T]): PartialFunction[Result, Map[String,T]] = {
@@ -64,12 +58,14 @@ private[commands] object ClientCommands {
   }
 
   def bulkResultToSet[T](conv: BinaryConverter[T]): PartialFunction[Result, Set[T]] = {
-    case MultiBulkDataResult(results) => results.filter {
-      case BulkDataResult(Some(_)) => true
-      case BulkDataResult(None) => false
-    }.map { r => conv.read(r.data.get) }.toSet
+    case MultiBulkDataResult(results) => filterEmptyAndMap(results, conv).toSet
     case BulkDataResult(Some(v)) => Set(conv.read(v))
   }
 
+
+  private[this] def filterEmptyAndMap[T](r: Seq[BulkDataResult], conv: BinaryConverter[T]) = r.filter {
+    case BulkDataResult(Some(_)) => true
+    case BulkDataResult(None) => false
+  }.map { r => conv.read(r.data.get) }
 }
 

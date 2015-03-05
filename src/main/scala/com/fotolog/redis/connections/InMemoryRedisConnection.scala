@@ -1,6 +1,5 @@
 package com.fotolog.redis.connections
 
-import java.nio.charset.Charset
 import java.text.ParseException
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -22,7 +21,7 @@ sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.Stri
   }
 
   def asSet = keyType match {
-    case KeyType.Set => v.asInstanceOf[Set[Array[Byte]]]
+    case KeyType.Set => v.asInstanceOf[Set[BytesWrapper]]
     case _ => throw new DataException("illegal type")
   }
 
@@ -33,7 +32,7 @@ sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.Stri
 private object Data {
   def str(d: Array[Byte], ttl: Int = -1) = Data(d, ttl, keyType = KeyType.String)
   def hash(map: Map[String, Array[Byte]], ttl: Int = -1) = Data(map, ttl, keyType = KeyType.Hash)
-  def set(set: Set[Array[Byte]], ttl: Int = -1) = Data(set, ttl, keyType = KeyType.Set)
+  def set(set: Set[BytesWrapper], ttl: Int = -1) = Data(set, ttl, keyType = KeyType.Set)
 }
 
 private case class DataException(msg: String) extends RuntimeException(msg)
@@ -132,7 +131,7 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       } getOrElse bulkNull
 
     case Hget(k, fld) =>
-      optVal(k) flatMap { _.asMap.get(fld).map( v => BulkDataResult(Some(v)) ) } getOrElse bulkNull
+      optVal(k) flatMap { _.asMap.get(fld).map( v => bytes2res(v) ) } getOrElse bulkNull
 
     case h: Hincrby =>
 
@@ -149,32 +148,20 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     // set commands
 
     case sadd: Sadd =>
-
-      val key = sadd.key
-
-      optVal(key).map { data =>
-
-        val sOld = data.asSet.map(DataWrapper)
-        val sNew = sadd.values.map(DataWrapper).filterNot(sOld).toSet
-
-        if (sNew.nonEmpty) {
-          map.put(key, Data.set((sOld ++ sNew).map(_.bytes)))
-        }
-
-        int2res(sNew.size)
-
-      } getOrElse {
-        map.put(key, Data.set(Set(sadd.values:_*)))
-        int2res(sadd.values.length)
-      }
+      val args = sadd.values.map(BytesWrapper).toSet
+      val orig = optVal(sadd.key) map(_.asSet) getOrElse Set()
+      map.put(sadd.key, Data.set(orig ++ args))
+      args.diff(orig).size
 
     case sisMember: Sismember =>
+      int2res(optVal(sisMember.key).map { data =>
+        if(data.asSet.contains(BytesWrapper(sisMember.v))) 1 else 0
+      } getOrElse 0)
 
-      if ( optVal(sisMember.key).map { _.asSet.map(DataWrapper).contains(DataWrapper(sisMember.v)) }.getOrElse(false) ) {
-        1
-      } else {
-        0
-      }
+    case Smembers(key) =>
+      optVal(key) map (data =>
+        MultiBulkDataResult(data.asSet.map(wrapper => bytes2res(wrapper.bytes)).toSeq)
+      ) getOrElse MultiBulkDataResult(Seq())
 
     case f: FlushAll =>
       map.clear()
@@ -193,6 +180,7 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       throw DataException("ERR hash value is not an integer")
   }
 
+  private[this] def bytes2res(a: Array[Byte]) = BulkDataResult(Some(a))
   private[this] def int2bytes(i: Int): Array[Byte] = i.toString.getBytes
 
   private[this] val ok = SingleLineResult("OK")
@@ -205,32 +193,16 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   override def shutdown() {}
 }
 
-case class DataWrapper(bytes: Array[Byte]) {
 
-  override def hashCode(): Int = {
-    val prime= 31
-    var result = 1
+case class BytesWrapper(bytes: Array[Byte]) {
 
-    result = prime * result + (if ((bytes == null)) 0 else bytes.hashCode())
+  override def hashCode() = util.Arrays.hashCode(bytes)
 
-    result
+  override def equals(obj: Any): Boolean = obj match {
+    case another: BytesWrapper => util.Arrays.equals(bytes, another.bytes)
+    case _ => false
   }
 
-  override def equals(obj: scala.Any): Boolean = obj match {
+  override def toString = s"DateWrapper: " + new String(bytes)
 
-    case another: DataWrapper =>
-      util.Arrays.equals(bytes, another.bytes)
-
-    case obj: Object =>
-      false
-
-    case null =>
-      false
-  }
-
-
-  override def toString: String = {
-    val encode = new String(bytes, Charset.forName("UTF-8"))
-    s"DateWrapper: " + encode
-  }
 }

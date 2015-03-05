@@ -3,15 +3,15 @@ package com.fotolog.redis.commands
 import com.fotolog.redis._
 import com.fotolog.redis.connections._
 
+import scala.collection.Set
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import scala.collection.Set
 
 /**
  * http://redis.io/commands#set
  */
 private[redis] trait SetCommands extends ClientCommands {
-  import ClientCommands._
+  import com.fotolog.redis.commands.ClientCommands._
 
   def saddAsync[T](key: String, values: T*)(implicit conv: BinaryConverter[T]): Future[Int] =
     r.send(Sadd(key, values.map(conv.write):_*)).map(integerResultAsInt)

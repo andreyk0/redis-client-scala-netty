@@ -10,7 +10,7 @@ import scala.concurrent.Future
  * http://redis.io/commands#list
  */
 private[redis] trait ListCommands extends ClientCommands {
-  import ClientCommands._
+  import com.fotolog.redis.commands.ClientCommands._
 
   def rpushAsync[T](key: String, value: T)(implicit conv: BinaryConverter[T]): Future[Int] =
     r.send(Rpush(key, conv.write(value) )).map(integerResultAsInt)

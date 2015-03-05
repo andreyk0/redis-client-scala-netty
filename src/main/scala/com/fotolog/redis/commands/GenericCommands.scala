@@ -2,6 +2,7 @@ package com.fotolog.redis.commands
 
 import com.fotolog.redis._
 import com.fotolog.redis.connections._
+
 import scala.collection.Set
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -14,7 +15,7 @@ import scala.concurrent.Future
 private[redis] trait GenericCommands extends ClientCommands {
   self: RedisClient =>
 
-  import ClientCommands._
+  import com.fotolog.redis.commands.ClientCommands._
 
   def delAsync(key: String): Future[Int] = r.send(Del(key)).map(integerResultAsInt)
 

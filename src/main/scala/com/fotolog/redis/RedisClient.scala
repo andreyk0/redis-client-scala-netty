@@ -1,11 +1,12 @@
 package com.fotolog.redis
 
+import java.util.concurrent.TimeUnit
+
 import com.fotolog.redis.commands._
-import com.fotolog.redis.connections.{RedisConnection, InMemoryRedisConnection, Netty3RedisConnection}
+import com.fotolog.redis.connections.{InMemoryRedisConnection, Netty3RedisConnection, RedisConnection}
 
 import scala.concurrent.duration.Duration
-import java.util.concurrent.TimeUnit
-import scala.concurrent.{Future, Await}
+import scala.concurrent.{Await, Future}
 
 object RedisClient {
 

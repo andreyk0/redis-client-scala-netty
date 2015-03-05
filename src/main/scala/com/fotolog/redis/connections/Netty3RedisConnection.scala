@@ -104,7 +104,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
 
 @Sharable
 private[redis] class RedisCommandEncoder extends OneToOneEncoder {
-  import Cmd._
+  import com.fotolog.redis.connections.Cmd._
   import org.jboss.netty.buffer.ChannelBuffers._
 
   override def encode(ctx: ChannelHandlerContext, channel: Channel, msg: AnyRef): AnyRef = {

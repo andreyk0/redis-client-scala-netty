@@ -39,13 +39,31 @@ class InMemoryClientTest extends TestCase {
     assertEquals("Ttl of nonexistent entity has to be -2", -2, c.ttl("bar"))
   }
 
-  def testSet() {
-    assertEquals("Should return count of new elements - 2", 2, c.sadd("sport", "tennis", "hockey"))
-    assertEquals("Should return count of new elements - 1", 1, c.sadd("sport", "football"))
-    assertEquals("Should return count of new elements - 0", 0, c.sadd("sport", "hockey"))
+  def testHash() {
+    assertTrue("Problem with creating hash", c.hmset("foo", "one" -> "another"))
+    assertTrue("Problem with creating 2 values hash", c.hmset("bar", "baz1" -> "1", "baz2" -> "2"))
 
-    assertEquals("Elements should exist", true, c.sismember("sport", "hockey"))
-    assertEquals("Elements should not exist", false, c.sismember("sport", "ski"))
-    assertEquals("Key should not exist", false, c.sismember("drink", "ski"))
+    assertEquals("Hash value is wrong", Some("another"), c.hget[String]("foo", "one"))
+    assertEquals("Hash value is wrong", Some("1"), c.hget[String]("bar", "baz1"))
+    assertEquals("Resulting map with 2 values", Map("baz1" -> "1", "baz2" -> "2"), c.hmget[String]("bar", "baz1", "baz2"))
+    assertEquals("Resulting map with 1 values", Map("baz2" -> "2"), c.hmget[String]("bar", "baz2"))
+
+    assertEquals("Was 2 plus 5 has to give 7", 7, c.hincr("bar", "baz2", 5))
+    assertEquals("Was 1 minus 4 has to give -3", -3, c.hincr("bar", "baz1", -4))
+
+    assertEquals("Changed map has to have values 7, -3", Map("baz1" -> "-3", "baz2" -> "7"), c.hmget[String]("bar", "baz1", "baz2"))
+
+  }
+
+  def testSet() {
+    assertEquals("Should add 2 elements and create set", 2, c.sadd("sport", "tennis", "hockey"))
+    assertEquals("Should add only one element", 1, c.sadd("sport", "football"))
+    assertEquals("Should not add any elements", 0, c.sadd("sport", "hockey"))
+
+    assertTrue("Elements should be in set", c.sismember("sport", "hockey"))
+    assertFalse("Elements should not be in set", c.sismember("sport", "ski"))
+    assertFalse("No set – no elements", c.sismember("drink", "ski"))
+
+    assertEquals("Resulting set has to contain all elements", Set("tennis", "hockey", "football"), c.smembers[String]("sport"))
   }
 }
