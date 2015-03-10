@@ -123,8 +123,9 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       ok
 
     case hmget: Hmget =>
-      optVal(hmget.key).map {
-        _.asMap.filterKeys(hmget.fields.contains(_)).values.map( v => BulkDataResult(Some(v)) ) match {
+      optVal(hmget.key).map { data =>
+        val m = data.asMap
+        hmget.fields.map(f => BulkDataResult(m.get(f)) ) match {
           case Seq(one) => one
           case bulks: Seq[BulkDataResult] => MultiBulkDataResult(bulks)
         }

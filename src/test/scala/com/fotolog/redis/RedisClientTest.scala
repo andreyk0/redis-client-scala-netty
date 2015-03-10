@@ -32,6 +32,8 @@ class RedisClientTest extends TestCase {
     assertTrue(c.set("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1"))
     assertEquals(Seq(Some("foo1"), None, Some("bar1"), Some("baz1")), c.get[String]("foo", "blah", "bar", "baz"))
     assertEquals(Map("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1"), c.mget[String]("foo", "blah", "baz", "bar"))
+    assertEquals(Map("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1"), c.mget[String]("foo", "blah", "baz", "nothing", "bar"))
+
     assertTrue(c.set("foobar" -> "foo2"))
     assertEquals(Some("foo2"), c.get[String]("foobar"))
   }

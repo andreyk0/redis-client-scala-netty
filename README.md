@@ -1,31 +1,24 @@
 ## [Redis](http://redis.io) scala client library
 
-Forked from [andreyk0](https://github.com/andreyk0/redis-client-scala-netty).
+## Features
 
-Changes from original one:
+* binary safe values
+* really asynchronous calls without any thread pools
+* protocol pipelining
+* connection multiplexing
+* in-memory redis implementation which can come in handy for testing (in active development)
+
+Changes from [original version](https://github.com/andreyk0/redis-client-scala-netty):
 * added support of [scripting](http://redis.io/commands#scripting) commands
 * moved to scala [futures](http://docs.scala-lang.org/overviews/core/futures.html)
 * binary safe requests encoding
-* added maven support
-
-## Why yet another scala client?
-* binary safe values
-* asynchronous calls
-* protocol pipelining
-* connection multiplexing
-
-## Building by [buildr tool](http://buildr.apache.org/):
-    $ buildr package
+* moved to maven
+* in-memory client
 
 ## Building by [maven](http://maven.apache.org/):
     $ mvn package
 
 Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH ALL DATA!
-To quickly build/package without running the tests:
-
-    $ buildr package test=no
-
-of for maven:
 
     $ mvn package -DskipTests=true
 
@@ -100,3 +93,12 @@ Conversion objects can be passed explicitly:
     c.set("key-name", 15)(intProtobufConverter)
     
  
+## In-memory client usage
+
+It is not necessary now to run standalone redis server for developing or unit testing, simply changing host name can force
+client to do perform all operations in memory. Also it is possible to emulate several databases at once. The behaviour is
+similar to in-memory databases in popular embeddable RDMS like H2 or HyperSQL. Following creates in-memory database `test`:
+
+    val c = RedisClient("mem:test")
+
+Note: feature is in active development so only basic operations are supported now.

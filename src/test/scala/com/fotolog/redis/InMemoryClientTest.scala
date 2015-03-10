@@ -53,6 +53,15 @@ class InMemoryClientTest extends TestCase {
 
     assertEquals("Changed map has to have values 7, -3", Map("baz1" -> "-3", "baz2" -> "7"), c.hmget[String]("bar", "baz1", "baz2"))
 
+    assertTrue(c.hmset[String]("zoo-key", "foo" -> "{foo}", "baz" -> "{baz}", "vaz" -> "{vaz}", "bzr" -> "{bzr}", "wry" -> "{wry}"))
+
+    val map = c.hmget[String]("zoo-key", "foo", "bzr", "vaz", "wry")
+
+    for(k <- map.keys) {
+      assertEquals("Values don't correspond to keys in result", "{" + k + "}", map(k))
+    }
+
+    assertEquals(Map("vaz" -> "{vaz}", "bzr" -> "{bzr}", "wry" -> "{wry}"), c.hmget[String]("zoo-key", "boo", "bzr", "vaz", "wry"))
   }
 
   def testSet() {
