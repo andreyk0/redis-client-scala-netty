@@ -1,19 +1,24 @@
 package com.fotolog.redis
 
-import junit.framework.TestCase
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
-class InMemoryClientTest extends TestCase {
+/**
+ * Will be merged with RedisClientTest when in-memory client will support
+ * full set of operations.
+ */
+class InMemoryClientTest {
   val c = RedisClient("mem:test")
 
-  override def setUp() = c.flushall
-  override def tearDown() = c.flushall
 
-  def testConnectionCommands(): Unit = {
+  @Before def setUp() { c.flushall }
+  @After def tearDown() { c.flushall }
+
+  @Test def testConnectionCommands() {
     assertTrue(c.ping())
   }
 
-  def testPingGetSetExistsType() {
+  @Test def testPingGetSetExistsType() {
     assertFalse(c.exists("foo"))
     assertTrue(c.set("foo", "bar", 2592000))
 
@@ -22,13 +27,36 @@ class InMemoryClientTest extends TestCase {
     assertEquals("bar", c.get[String]("foo").get)
     assertEquals(KeyType.String, c.keytype("foo"))
 
+    // keys test
+    assertTrue(c.set("boo", "baz"))
+    assertTrue(c.set("baz", "bar"))
+    assertTrue(c.set("buzzword", "bar"))
+
+    assertEquals(Set("foo", "boo"), c.keys("?oo"))
+    assertEquals(Set("foo", "boo", "baz", "buzzword"), c.keys("*"))
+    assertEquals(Set("foo", "boo", "baz"), c.keys("???"))
+    assertEquals(Set("baz", "buzzword", "boo"), c.keys("*b*"))
+
     assertEquals("One key has to be deleted", 1, c.del("foo"))
     assertFalse("Key should not exist", c.exists("foo"))
 
     assertEquals("No keys has to be deleted", 0, c.del("foo"))
   }
 
-  def testKeyTtl() {
+  @Test def testStringCommands(): Unit = {
+    assertTrue(c.set("foo", 1))
+    assertEquals(11, c.incr("foo", 10))
+    assertEquals(0, c.incr("foo", -11))
+    assertEquals(-5, c.incr("unexistent", -5))
+  }
+
+  @Test(expected = classOf[RedisException])
+  def testIncrementFailure() {
+    assertTrue(c.set("baz", "bar"))
+    c.incr("baz")
+  }
+
+  @Test def testKeyTtl() {
     assertTrue(c.set("foo", "bar", 5))
     assertTrue(c.ttl("foo") <= 5)
 
@@ -39,7 +67,7 @@ class InMemoryClientTest extends TestCase {
     assertEquals("Ttl of nonexistent entity has to be -2", -2, c.ttl("bar"))
   }
 
-  def testHash() {
+  @Test def testHash() {
     assertTrue("Problem with creating hash", c.hmset("foo", "one" -> "another"))
     assertTrue("Problem with creating 2 values hash", c.hmset("bar", "baz1" -> "1", "baz2" -> "2"))
 
@@ -64,7 +92,7 @@ class InMemoryClientTest extends TestCase {
     assertEquals(Map("vaz" -> "{vaz}", "bzr" -> "{bzr}", "wry" -> "{wry}"), c.hmget[String]("zoo-key", "boo", "bzr", "vaz", "wry"))
   }
 
-  def testSet() {
+  @Test def testSet() {
     assertEquals("Should add 2 elements and create set", 2, c.sadd("sport", "tennis", "hockey"))
     assertEquals("Should add only one element", 1, c.sadd("sport", "football"))
     assertEquals("Should not add any elements", 0, c.sadd("sport", "hockey"))

@@ -150,10 +150,9 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
     // println("decode[%s]: %h -> %s".format(Thread.currentThread.getName, this, responseType))
 
     responseType match {
-      case Unknown if buf.readable => {
+      case Unknown if buf.readable =>
           responseType = ResponseType(buf.readByte)
           decode(ctx, ch, buf)
-      }
 
       case Unknown if !buf.readable => null // need more data
 
@@ -184,10 +183,9 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
 
       case x => readAsciiLine(buf) match {
           case null => null // need more data
-          case line => {
+          case line =>
               responseType = Unknown
               (x, line)
-          }
       }
     }
   }
@@ -224,7 +222,7 @@ private[redis] class RedisResponseAccumulator(opQueue: ArrayBlockingQueue[Result
       case (resType:ResponseType, line:String) => {
         clear()
         resType match {
-          case Error => success(ErrorResult(line))
+          case Error => error(ErrorResult(line))
           case SingleLine => success(SingleLineResult(line))
           case Integer => success(BulkDataResult(Some(line.getBytes)))
           case MultiBulkData => line.toInt match {
@@ -277,6 +275,11 @@ private[redis] class RedisResponseAccumulator(opQueue: ArrayBlockingQueue[Result
   private def success(r: Result) {
     val respFuture = opQueue.poll(60, TimeUnit.SECONDS)
     respFuture.promise.success(r)
+  }
+
+  private def error(e: ErrorResult): Unit = {
+    val respFuture = opQueue.poll(60, TimeUnit.SECONDS)
+    respFuture.promise.failure(new RedisException(e.err))
   }
 
   private def clear() {

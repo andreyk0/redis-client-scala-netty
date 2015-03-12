@@ -1,28 +1,28 @@
 package com.fotolog.redis.connections
 
-import java.text.ParseException
 import java.util
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, Executors}
 
-import com.fotolog.redis.KeyType
+import com.fotolog.redis.{RedisException, KeyType}
 
+import scala.collection.JavaConversions._
 import scala.compat.Platform
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future}
 
 sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.String, stamp: Long = Platform.currentTime) {
   def asBytes = keyType match {
     case KeyType.String => v.asInstanceOf[Array[Byte]]
-    case _ => throw new DataException("illegal type")
+    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
   }
 
   def asMap = keyType match {
     case KeyType.Hash => v.asInstanceOf[Map[String, Array[Byte]]]
-    case _ => throw new DataException("illegal type")
+    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
   }
 
   def asSet = keyType match {
     case KeyType.Set => v.asInstanceOf[Set[BytesWrapper]]
-    case _ => throw new DataException("illegal type")
+    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
   }
 
   def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000L)
@@ -35,52 +35,40 @@ private object Data {
   def set(set: Set[BytesWrapper], ttl: Int = -1) = Data(set, ttl, keyType = KeyType.Set)
 }
 
-private case class DataException(msg: String) extends RuntimeException(msg)
-
 object InMemoryRedisConnection {
   val fakeServers = new ConcurrentHashMap[String, ConcurrentHashMap[String, Data]]
 
+  val context = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor)
+
   private[redis] val cleaner = new Runnable {
     override def run() = {
-      while(true) {
-        val servers = fakeServers.elements()
+      val servers = fakeServers.elements()
 
-        while(servers.hasMoreElements) {
-          val map = servers.nextElement()
+      while(servers.hasMoreElements) {
+        val map = servers.nextElement()
 
-          val it = map.entrySet.iterator
-          while (it.hasNext) {
-            if(it.next.getValue.expired) it.remove()
-          }
+        val it = map.entrySet.iterator
+        while (it.hasNext) {
+          if(it.next.getValue.expired) it.remove()
         }
-
-        Thread.sleep(1000)
       }
     }
   }
-
-  private[this] val t = new Thread(cleaner)
-  t.setDaemon(true)
-  t.start()
 }
 
 /**
  * Fake redis connection that can be used for testing purposes.
  */
 class InMemoryRedisConnection(dbName: String) extends RedisConnection {
-  InMemoryRedisConnection.fakeServers.putIfAbsent(dbName, new ConcurrentHashMap[String, Data]())
+  import com.fotolog.redis.connections.InMemoryRedisConnection._
+  import com.fotolog.redis.connections.ErrMessages._
 
-  val map = InMemoryRedisConnection.fakeServers.get(dbName)
+  fakeServers.putIfAbsent(dbName, new ConcurrentHashMap[String, Data]())
+  val map = fakeServers.get(dbName)
 
   override def send(cmd: Cmd): Future[Result] = {
-    val result = try {
-      syncSend(cmd)
-    } catch {
-      case dex: DataException =>
-        ErrorResult(dex.msg)
-    }
-
-    Promise.successful(result).future
+    context.execute(cleaner)
+    Future { syncSend(cmd) }(context)
   }
 
   private[this] def syncSend(cmd: Cmd): Result = cmd match {
@@ -97,6 +85,18 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     case Get(key) =>
       BulkDataResult(
         optVal(key) filterNot(_.expired) map (_.asBytes)
+      )
+
+    case Incr(key, delta) =>
+      val newVal = (optVal(key) map { a => bytes2int(a.asBytes, ERR_INVALID_NUMBER) } getOrElse 0) + delta
+      map.put(key, Data.str(int2bytes(newVal)))
+      newVal
+
+    case Keys(pattern) =>
+      MultiBulkDataResult(
+        map.keys()
+           .filter(_.matches(pattern.replace("*", ".*?").replace("?", ".?")))
+           .map(k => BulkDataResult(Some(k.getBytes))).toSeq
       )
 
     case Expire(key, seconds) =>
@@ -138,13 +138,13 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
       val updatedMap = optVal(h.key).map { data =>
         val m = data.asMap
-        val oldVal = m.get(h.field).map(bytes2int).getOrElse(0) + h.delta
+        val oldVal = m.get(h.field).map(a => bytes2int(a, ERR_INVALID_HASH_NUMBER)).getOrElse(0) + h.delta
         m.updated(h.field, int2bytes(oldVal))
       } getOrElse Map(h.field -> int2bytes(h.delta))
 
       map.put(h.key, Data.hash(updatedMap))
 
-      int2res(bytes2int(updatedMap(h.field)))
+      int2res(bytes2int(updatedMap(h.field), ERR_INVALID_HASH_NUMBER))
 
     // set commands
 
@@ -174,11 +174,11 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
   private[this] implicit def int2res(v: Int): Result = BulkDataResult(Some(v.toString.getBytes))
 
-  private[this] def bytes2int(b: Array[Byte]) = try {
+  private[this] def bytes2int(b: Array[Byte], msg: String) = try {
     new String(b).toInt
   } catch {
-    case p: ParseException =>
-      throw DataException("ERR hash value is not an integer")
+    case p: IllegalArgumentException =>
+      throw new RedisException(msg)
   }
 
   private[this] def bytes2res(a: Array[Byte]) = BulkDataResult(Some(a))
@@ -188,6 +188,21 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   private[this] val bulkNull = BulkDataResult(None)
 
   private[this] def optVal(key: String) = Option(map.get(key))
+
+  /* Stub for concurrent version
+  @tailrec
+  private[this] def mapSubHashField(key: String, field: String, fn: Option[Array[Byte]] => Array[Byte]): Unit = {
+    val orig = map.get(key)
+    val updated = Option(orig).map(_.asMap)
+                    .map { submap => submap.updated(field, fn(submap.get(field))) }
+                    .getOrElse { Map[String, Array[Byte]](field -> fn(None)) }
+
+    val old = map.replace(key, Data.hash(updated))
+
+    if(orig != old) {
+      mapSubHashField(key, field, fn)
+    }
+  } */
 
   override def isOpen: Boolean = true
 
@@ -206,4 +221,11 @@ case class BytesWrapper(bytes: Array[Byte]) {
 
   override def toString = s"DateWrapper: " + new String(bytes)
 
+}
+
+
+private object ErrMessages {
+  val ERR_INVALID_NUMBER = "ERR value is not an integer or out of range"
+  val ERR_INVALID_HASH_NUMBER = "ERR hash value is not an integer"
+  val ERR_INVALID_TYPE = "WRONGTYPE Operation against a key holding the wrong kind of value"
 }

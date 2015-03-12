@@ -1,21 +1,15 @@
 package com.fotolog.redis
 
-import junit.framework.TestCase
-
-import org.junit._
 import org.junit.Assert._
-import RedisClient._
-import scala.Some
-import scala.Some
+import org.junit._
 
-class RedisClientTest extends TestCase {
+class RedisClientTest {
   val c = RedisClient("localhost", 6379)
 
-  override def setUp() = c.flushall
-  override def tearDown() = c.flushall
+  @Before def setUp() { c.flushall }
+  @After def tearDown() { c.flushall }
 
-
-  def testPingGetSetExistsType() {
+  @Test def testPingGetSetExistsType() {
     assertTrue(c.ping())
     assertFalse(c.exists("foo"))
     assertTrue(c.set("foo", "bar", 1))
@@ -28,7 +22,13 @@ class RedisClientTest extends TestCase {
     assertEquals(-2, c.ttl("foo"))
   }
 
-  def testMgetMset() {
+  @Test(expected = classOf[RedisException])
+  def testIncrementFailure() {
+    assertTrue(c.set("baz", "bar"))
+    c.incr("baz")
+  }
+
+  @Test def testMgetMset() {
     assertTrue(c.set("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1"))
     assertEquals(Seq(Some("foo1"), None, Some("bar1"), Some("baz1")), c.get[String]("foo", "blah", "bar", "baz"))
     assertEquals(Map("foo" -> "foo1", "bar" -> "bar1", "baz" -> "baz1"), c.mget[String]("foo", "blah", "baz", "bar"))
@@ -38,7 +38,7 @@ class RedisClientTest extends TestCase {
     assertEquals(Some("foo2"), c.get[String]("foobar"))
   }
 
-  def testSetNxEx() {
+  @Test def testSetNxEx() {
     assertTrue(c.setNx("blah", "blah"))
     assertFalse(c.setNx("blah", "boo"))
 
@@ -53,37 +53,37 @@ class RedisClientTest extends TestCase {
     assertFalse(c.setNx("blah", "blah", 10))
   }
 
-  def testGetSet() {
+  @Test def testGetSet() {
     assertEquals(None, c.getset("foo", "bar"))
     assertEquals(Some("bar"), c.getset[String]("foo", "baz"))
     assertEquals(Some("baz"), c.getset[String]("foo", "blah"))
   }
 
-  def testSetEx() {
+  @Test def testSetEx() {
     assertTrue(c.set("foo", "bar", 123))
     assertEquals(Some("bar"), c.get[String]("foo"))
   }
 
-  def testIncrDecr() {
+  @Test def testIncrDecr() {
     assertEquals(1, c.incr("foo"))
     assertEquals(3, c.incr("foo", 2))
     assertEquals(2, c.decr("foo"))
     assertEquals(-1, c.decr("foo", 3))
   }
 
-  def testAppend() {
+  @Test def testAppend() {
     assertTrue(c.set("foo", "bar"))
     assertEquals(6, c.append("foo", "baz"))
     assertEquals(Some("barbaz"), c.get[String]("foo"))
   }
 
-  def testSubstr() {
+  @Test def testSubstr() {
     assertEquals(None, c.substr[String]("foo", 0, 1))
     assertTrue(c.set("foo", "bar"))
     assertEquals(Some("ba"), c.substr[String]("foo", 0, 1))
   }
 
-  def testExpirePersist() {
+  @Test def testExpirePersist() {
     assertTrue(c.set("foo", "bar"))
     assertTrue(c.expire("foo", 100))
     assertEquals(100, c.ttl("foo"))
@@ -92,7 +92,7 @@ class RedisClientTest extends TestCase {
     assertEquals(-2, c.ttl("somekey"))
   }
 
-  def testLists() {
+  @Test def testLists() {
     assertEquals(Seq(), c.lrange[String]("foo", 0, 100))
     assertEquals(1, c.rpush("foo", "ccc"))
     assertEquals(2, c.lpush("foo", "bbb"))
@@ -122,7 +122,7 @@ class RedisClientTest extends TestCase {
     assertEquals(Seq("aaa"), c.lrange[String]("foo1", 0, 100))
   }
 
-  def testHashes() {
+  @Test def testHashes() {
     assertEquals(Map(), c.hgetall[String]("hk"))
     assertTrue(c.hset("hk", "foo", "bar"))
     assertEquals(Some("bar"), c.hget[String]("hk", "foo"))
@@ -143,8 +143,8 @@ class RedisClientTest extends TestCase {
     assertFalse(c.hexists("hk", "foo"))
   }
 
-  def testSets() {
-    import scala.collection.{ Set => SCSet }
+  @Test def testSets() {
+    import scala.collection.{Set => SCSet}
     assertEquals(1, c.sadd("set1", "foo"))
     assertEquals(0, c.sadd("set1", "foo"))
     assertTrue(c.srem("set1", "foo"))
@@ -193,7 +193,7 @@ class RedisClientTest extends TestCase {
     assertTrue(SCSet("foo", "bar", "baz").contains(c.srandmember[String]("set1").get))
   }
 
-  def testScripting() {
+  @Test def testScripting() {
     assertEquals(2, c.eval[Int]("return ARGV[1];", ("anyKey", "2")).head)
     assertEquals("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", c.scriptLoad("return ARGV[1];"))
     assertEquals(4, c.evalsha[Int]("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", ("key", "4")).head)
@@ -205,7 +205,7 @@ class RedisClientTest extends TestCase {
     assertFalse(c.scriptExists("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228"))
   }
 
- def testKeys() {
+  @Test def testKeys() {
     c.set("prefix:1" -> 1, "prefix:2" -> 2)
     assertEquals(Set("prefix:1", "prefix:2"), c.keys("prefix:*"))
     c.del("prefix:1")
@@ -213,24 +213,25 @@ class RedisClientTest extends TestCase {
   }
 
 
-  def testTransactions() {
+  @Test def testTransactions() {
     c.withTransaction { cli =>
       cli.setAsync("tx_key", "tx_val")
     }
   }
 
 
-  def testIntConversions(){
+  @Test def testNumericConversions() {
     testIntVals.foreach{ i=>
       assertTrue(c.set("foo", i))
       assertEquals(Some(i), c.get[Int]("foo"))
     }
+
     testLongVals.foreach{ i=>
       assertTrue(c.set("foo", i))
       assertEquals(Some(i), c.get[Long]("foo"))
     }
   }
 
-  private def testIntVals(): List[Int] = 0 :: {for(i<-0 to 30) yield List(1<<i,-(1<<i))}.toList.flatten
-  private def testLongVals(): List[Long] = 0l :: {for(i<-0 to 62) yield List(1l<<i,-(1l<<i))}.toList.flatten
+  private def testIntVals = 0 :: {for(i<-0 to 30) yield List(1<<i,-(1<<i))}.toList.flatten
+  private def testLongVals = 0l :: {for(i<-0 to 62) yield List(1l<<i,-(1l<<i))}.toList.flatten
 }
