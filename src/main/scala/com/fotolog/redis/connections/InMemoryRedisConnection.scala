@@ -164,6 +164,24 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
         MultiBulkDataResult(data.asSet.map(wrapper => bytes2res(wrapper.bytes)).toSeq)
       ) getOrElse MultiBulkDataResult(Seq())
 
+    case eval: Eval =>
+      import com.fotolog.redis.primitives.Redlock._
+
+      val (key, value) = eval.kv.head
+
+      eval.script.equals(UNLOCK_SCRIPT) match {
+        case true =>
+
+          if (BytesWrapper(map.get(key).asBytes).equals(BytesWrapper(value))) {
+            map.remove(key)
+            BulkDataResult(Some("1".getBytes()))
+          } else {
+            BulkDataResult(Some("0".getBytes()))
+          }
+
+        case _ => throw new RedisException(ERR_UNSUPPORTED_SCRIPT + eval.script)
+      }
+
     case f: FlushAll =>
       map.clear()
       ok
@@ -228,4 +246,5 @@ private object ErrMessages {
   val ERR_INVALID_NUMBER = "ERR value is not an integer or out of range"
   val ERR_INVALID_HASH_NUMBER = "ERR hash value is not an integer"
   val ERR_INVALID_TYPE = "WRONGTYPE Operation against a key holding the wrong kind of value"
+  val ERR_UNSUPPORTED_SCRIPT= "ERR Operation not support for script:"
 }

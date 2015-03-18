@@ -194,10 +194,15 @@ class RedisClientTest {
   }
 
   @Test def testScripting() {
+    import com.fotolog.redis.primitives.Redlock._
+
     assertEquals(2, c.eval[Int]("return ARGV[1];", ("anyKey", "2")).head)
     assertEquals("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", c.scriptLoad("return ARGV[1];"))
     assertEquals(4, c.evalsha[Int]("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228", ("key", "4")).head)
 
+    assertTrue(c.setNx("lock_key", "lock_value"))
+    assertEquals(Set(0), c.eval[Int](UNLOCK_SCRIPT, ("lock_key", "no_lock_value") ))
+    assertEquals(Set(1), c.eval[Int](UNLOCK_SCRIPT, ("lock_key", "lock_value") ))
 
     assertTrue(c.scriptExists("4629ab89363d08ca29abd4bb0aaf5ed70e2bb228"))
     assertTrue(c.scriptFlush())

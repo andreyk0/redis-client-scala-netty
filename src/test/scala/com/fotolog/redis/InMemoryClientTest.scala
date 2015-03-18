@@ -10,7 +10,6 @@ import org.junit.{After, Before, Test}
 class InMemoryClientTest {
   val c = RedisClient("mem:test")
 
-
   @Before def setUp() { c.flushall }
   @After def tearDown() { c.flushall }
 
@@ -102,5 +101,14 @@ class InMemoryClientTest {
     assertFalse("No set – no elements", c.sismember("drink", "ski"))
 
     assertEquals("Resulting set has to contain all elements", Set("tennis", "hockey", "football"), c.smembers[String]("sport"))
+  }
+
+  @Test def testScript() {
+    import com.fotolog.redis.primitives.Redlock._
+
+    assertTrue(c.set("redlock:key", "redlock:value"))
+    assertEquals("Should not unlock redis server with nonexistent value", Set(0), c.eval[Int](UNLOCK_SCRIPT, "redlock:key" -> "non:value"))
+    assertEquals("Should unlock redis server", Set(1), c.eval[Int](UNLOCK_SCRIPT, "redlock:key" -> "redlock:value"))
+
   }
 }
