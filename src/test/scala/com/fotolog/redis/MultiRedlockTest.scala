@@ -26,9 +26,9 @@ class MultiRedlockTest {
 
     val lock = l.lock("redlock:key", 60*60, 5).asInstanceOf[SuccessfulLock]
 
-    assertEquals("Should lock redis servers", true, lock.successful)
+    assertTrue("Should lock redis servers", lock.successful)
     assertEquals("Key should equals", "redlock:key", lock.key)
-    assertEquals("Key should exist", true, c0.exists(lock.key))
+    assertTrue("Key should exist", c0.exists(lock.key))
 
   }
 
@@ -37,7 +37,7 @@ class MultiRedlockTest {
     Thread.sleep(100)
     val lock = l.lock("redlock:key", 60*60, 5)
 
-    assertEquals("Should not lock redis servers", false, lock.successful)
+    assertFalse("Should not lock redis servers", lock.successful)
 
   }
 
