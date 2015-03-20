@@ -10,35 +10,32 @@ import org.junit.{Test, After, Before}
 @RunWith(classOf[ParallelRunner])
 class MultiRedlockTest {
 
-  val c0 = RedisClient("localhost", 6379)
-  val c1 = RedisClient("localhost", 6378)
-  val c2 = RedisClient("localhost", 6376)
+  val clients = Array(
+    RedisClient("localhost", 6379),
+    RedisClient("localhost", 6378),
+    RedisClient("localhost", 6376)
+  )
 
-  val l = Redlock(c0, c1, c2)
+  val l = Redlock(clients)
 
   @Before def setUp() {
-    c0.flushall
-    c1.flushall
-    c2.flushall
+    clients.foreach(_.flushall)
   }
 
-  @Test def testDistlockSuccess(): Unit = {
+  @Test def testDistlockSuccess() {
 
     val lock = l.lock("redlock:key", 60*60, 5).asInstanceOf[SuccessfulLock]
 
     assertTrue("Should lock redis servers", lock.successful)
     assertEquals("Key should equals", "redlock:key", lock.key)
-    assertTrue("Key should exist", c0.exists(lock.key))
-
+    assertTrue("Key should exist", clients(0).exists(lock.key))
   }
 
-  @Test def testDistlockFailed(): Unit = {
-
+  @Test def testDistlockFailed() {
     Thread.sleep(100)
     val lock = l.lock("redlock:key", 60*60, 5)
 
     assertFalse("Should not lock redis servers", lock.successful)
-
   }
 
 }

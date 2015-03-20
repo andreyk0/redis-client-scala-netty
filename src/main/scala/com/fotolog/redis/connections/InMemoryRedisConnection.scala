@@ -167,19 +167,19 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     case eval: Eval =>
       import com.fotolog.redis.primitives.Redlock._
 
-      val (key, value) = eval.kv.head
-
+      // hardcoded support for Redlock implementation
       eval.script.equals(UNLOCK_SCRIPT) match {
         case true =>
-
+          val (key, value) = eval.kv.head
           if (BytesWrapper(map.get(key).asBytes).equals(BytesWrapper(value))) {
             map.remove(key)
-            BulkDataResult(Some("1".getBytes()))
+            1
           } else {
-            BulkDataResult(Some("0".getBytes()))
+            0
           }
 
-        case _ => throw new RedisException(ERR_UNSUPPORTED_SCRIPT + eval.script)
+        case _ =>
+          throw new RedisException(ERR_UNSUPPORTED_SCRIPT + eval.script)
       }
 
     case f: FlushAll =>
