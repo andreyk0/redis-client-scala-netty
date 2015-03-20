@@ -14,6 +14,7 @@ Changes from [original version](https://github.com/andreyk0/redis-client-scala-n
 * binary safe requests encoding
 * moved to maven
 * in-memory client
+* Distributed lock implementation ([Redlock](http://redis.io/topics/distlock))
 
 ## Building by [maven](http://maven.apache.org/):
     $ mvn package
@@ -102,3 +103,30 @@ similar to in-memory databases in popular embeddable RDMS like H2 or HyperSQL. F
     val c = RedisClient("mem:test")
 
 Note: feature is in active development so only basic operations are supported now.
+
+## Redlock usage
+Distributed lock implementation on multiple (or one) redis instances. Based on algorithm described  ([here](http://redis.io/topics/distlock)).
+Usage example:
+
+    val redlock = Redlock("192.168.2.11" -> 6379, "192.168.2.12" -> 6379, "192.168.2.13" -> 6379)
+    
+    val lock = redlock.lock("resource-name", ttl = 60)
+    
+    if(lock.successful) {
+        /* Some code that has to be executed only on one instance/thread. */
+    }
+    
+    
+One have to specify some name common for all application instances. In case of success `lock` method returns object that contains resource name and some random vaalue that should be used to unlock resource:
+
+    redlock.unlock(lock)
+
+Manual unlocking is not always necessary as lock will be unlocked automatically on Redis server after `ttl` seconds will pass.
+Also there is convenient `withLock` method:
+
+    val redlock = Redlock("192.168.2.15")
+    redlock.withLock("resource-name") {
+        /* Some code that has to be executed only on one instance/thread. */
+    }
+
+Redlock is fully supported by in-memory client.
