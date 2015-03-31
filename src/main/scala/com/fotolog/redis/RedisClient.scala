@@ -7,6 +7,7 @@ import com.fotolog.redis.connections.{InMemoryRedisConnection, Netty3RedisConnec
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import scala.util.Try
 
 object RedisClient {
 
@@ -20,7 +21,15 @@ object RedisClient {
     if(host.startsWith("mem:")) {
       new RedisClient(new InMemoryRedisConnection(host.substring("mem:".length)), timeout)
     } else {
-      new RedisClient(new Netty3RedisConnection(host, port), timeout)
+      // in case host specified as "host:port" then override port
+      val (aHost, aPort) = if(host.contains(":")) {
+        val Array(h, p) = host.split(":")
+        (h, p.toInt)
+      } else {
+        Array(host, port)
+      }
+
+      new RedisClient(new Netty3RedisConnection(aHost, aPort), timeout)
     }
 
 }
