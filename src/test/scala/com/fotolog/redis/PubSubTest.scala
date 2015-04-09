@@ -12,7 +12,11 @@ class PubSubTest {
   // @Before def setUp() { c.flushall }
   // @After def tearDown() { c.flushall }
 
-  @Test def testPingGetSetExistsType() {
+  @Test def testPublish() {
+    c.publish[String]("baz", "message-test")
+  }
+
+  @Test  def testSubscribe() {
     c.subscribe[String]("baz", "foo") { (x, y) =>
       println("Got data from channels: " + x + ":" + y)
     }
