@@ -13,12 +13,12 @@ private[redis] trait ScriptingCommands extends ClientCommands {
   import com.fotolog.redis.commands.ClientCommands._
 
   def evalAsync[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) =
-    r.send(Eval(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(bulkResultToSet(conv))
+    r.send(Eval(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)})).map(bulkResultToSet(conv))
 
   def eval[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) = await { evalAsync(script, kvs: _*) }
 
   def evalshaAsync[T](script: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) =
-    r.send(EvalSha(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)} : _*)).map(bulkResultToSet(conv))
+    r.send(EvalSha(script, kvs.map{kv => kv._1 -> BinaryConverter.StringConverter.write(kv._2)})).map(bulkResultToSet(conv))
 
   def evalsha[T](digest: String, kvs: (String, String)*)(implicit conv: BinaryConverter[T]) = await { evalshaAsync(digest, kvs: _*) }
 

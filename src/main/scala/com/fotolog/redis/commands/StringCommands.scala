@@ -42,19 +42,19 @@ private[redis] trait StringCommands extends ClientCommands {
   }
 
   def setNxAsync[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(SetNx(kvs.map{kv => kv._1 -> conv.write(kv._2)} : _*)).map(integerResultAsBoolean)
+    r.send(SetNx(kvs.map { kv => kv._1 -> conv.write(kv._2)})).map(integerResultAsBoolean)
 
   def setNx[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { setNxAsync(kvs: _*)(conv) }
 
   def setAsync[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(MSet(kvs.map { kv => kv._1 -> conv.write(kv._2)} : _*)).map(okResultAsBoolean)
+    r.send(MSet(kvs.map { kv => kv._1 -> conv.write(kv._2)})).map(okResultAsBoolean)
 
   def set[T](kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { setAsync(kvs: _*)(conv) }
 
   def getAsync[T](key: String)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
     r.send(Get(key)).map(bulkDataResultToOpt(conv))
 
-  def getAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Seq[Option[T]]] = r.send(MGet(keys: _*)).map {
+  def getAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Seq[Option[T]]] = r.send(MGet(keys)).map {
     case BulkDataResult(data) => Seq(data.map(conv.read))
     case MultiBulkDataResult(results) => results.map { _.data.map(conv.read) }
     case x => throw new IllegalStateException("Invalid response got from server: " + x)
@@ -64,7 +64,7 @@ private[redis] trait StringCommands extends ClientCommands {
   def get[T](keys: String*)(implicit conv: BinaryConverter[T]): Seq[Option[T]] = await { getAsync(keys: _*)(conv) }
 
   def mgetAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Map[String,T]] =
-    r.send( MGet(keys: _*)).map(multiBulkDataResultToMap(keys, conv))
+    r.send(MGet(keys)).map(multiBulkDataResultToMap(keys, conv))
 
   def mget[T](keys: String*)(implicit conv: BinaryConverter[T]): Map[String,T] = await { mgetAsync(keys: _*)(conv) }
 

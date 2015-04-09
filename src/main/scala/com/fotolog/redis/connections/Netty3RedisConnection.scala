@@ -51,15 +51,13 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   private[Netty3RedisConnection] var isRunning = true
   private[Netty3RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
   private[Netty3RedisConnection] val opQueue = new ArrayBlockingQueue[ResultFuture](128)
-
-  @volatile
-  private[Netty3RedisConnection] var responseHandler = new AtomicReference[ResultHandler](NormalStateHandler(opQueue))
+  private[Netty3RedisConnection] var clientState = new AtomicReference[ConnectionState](NormalConnectionState(opQueue))
 
   clientBootstrap.setPipelineFactory(new ChannelPipelineFactory() {
     override def getPipeline = {
       val p = Channels.pipeline
       p.addLast("response_decoder",     new RedisResponseDecoder())
-      p.addLast("response_accumulator", new RedisResponseAccumulator(responseHandler))
+      p.addLast("response_accumulator", new RedisResponseAccumulator(clientState))
       p.addLast("command_encoder",      commandEncoder)
       p
     }
@@ -206,7 +204,7 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
   }
 }
 
-private[redis] class RedisResponseAccumulator(respHandlerRef: AtomicReference[ResultHandler]) extends SimpleChannelHandler with ChannelExceptionHandler {
+private[redis] class RedisResponseAccumulator(connStateRef: AtomicReference[ConnectionState]) extends SimpleChannelHandler with ChannelExceptionHandler {
   import scala.collection.mutable.ArrayBuffer
 
   val bulkDataBuffer = ArrayBuffer[BulkDataResult]()
@@ -269,7 +267,9 @@ private[redis] class RedisResponseAccumulator(respHandlerRef: AtomicReference[Re
   }
 
   private def handleResult(r: Result) {
-    respHandlerRef.get().handle(r)
+    val nextStateOpt = connStateRef.get().handle(r)
+
+    for(nextState <- nextStateOpt) connStateRef.set(nextState)
   }
 
   private def clear() {
@@ -278,27 +278,62 @@ private[redis] class RedisResponseAccumulator(respHandlerRef: AtomicReference[Re
   }
 }
 
-// Client can go into Subscribed state with reduced commands set and
-// receiving responses without commands
-sealed trait ResultHandler {
-  def handle(r: Result)
+/**
+ * Connection can go into Subscribed state with reduced commands set and
+ * receiving responses without commands
+ */
+sealed trait ConnectionState {
+
+  /**
+   * Handles results got from socket. Optionally can return new connection state.
+   * @param r result to handle
+   * @return new connection state or none if state remains.
+   */
+  def handle(r: Result): Option[ConnectionState]
 }
 
-case class NormalStateHandler(queue: BlockingQueue[ResultFuture]) extends ResultHandler {
-  def handle(r: Result) = {
+case class NormalConnectionState(queue: BlockingQueue[ResultFuture]) extends ConnectionState {
+  def handle(r: Result): Option[ConnectionState] = {
     val respFuture = queue.poll(60, TimeUnit.SECONDS)
 
     r match {
       case ErrorResult(err) =>
         respFuture.promise.failure(new RedisException(err))
+        None
       case r: Result =>
-        respFuture.promise.success(r)
+        respFuture.cmd match {
+          case subscribeCmd: Subscribe =>
+            val subscribeHandler = SubscribedConnectionState(this, respFuture, subscribeCmd)
+            subscribeHandler.handle(r)
+            Some(subscribeHandler)
+          case _ =>
+            respFuture.promise.success(r)
+            None
+        }
     }
   }
 }
 
-class SubscribedStateHandler extends ResultHandler {
-  def handle(r: Result) = {
-    println(r)
+case class SubscribedConnectionState(oldState: ConnectionState, subscriptionResult: ResultFuture, subscribeCmd: Subscribe) extends ConnectionState {
+  final val handler = subscribeCmd.handler
+  final val resultsArray = new Array[BulkDataResult](subscribeCmd.channels.size)
+
+  def handle(r: Result): Option[ConnectionState] = {
+    try {
+      r match {
+        case informResult: BulkDataResult =>
+          // subscriptionResult.promise.success(informResult)
+          println(">" + informResult)
+
+        case messageResult: MultiBulkDataResult =>
+          handler(messageResult)
+      }
+
+      None
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
+        None
+    }
   }
 }

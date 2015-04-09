@@ -17,9 +17,9 @@ private[redis] trait GenericCommands extends ClientCommands {
 
   import com.fotolog.redis.commands.ClientCommands._
 
-  def delAsync(key: String): Future[Int] = r.send(Del(key)).map(integerResultAsInt)
+  def delAsync(key: String*): Future[Int] = r.send(Del(key)).map(integerResultAsInt)
 
-  def del(key: String): Int = await { delAsync(key) }
+  def del(key: String*): Int = await { delAsync(key:_*) }
 
   def existsAsync(key: String): Future[Boolean] = r.send(Exists(key)).map(integerResultAsBoolean)
   def exists(key: String): Boolean = await(existsAsync(key))
@@ -75,7 +75,7 @@ private[redis] trait GenericCommands extends ClientCommands {
   def discardAsync() = r.send(Discard())
   def multiAsync() = r.send(Multi()).map(okResultAsBoolean)
   def execAsync() = r.send(Exec()).map(multiBulkDataResultToSet(BinaryConverter.StringConverter))
-  def watchAsync(keys: String*) = r.send(Watch(keys:_*))
+  def watchAsync(keys: String*) = r.send(Watch(keys))
   def unwatchAsync() = r.send(Unwatch())
 
   def withTransaction(block: RedisClient => Unit) = {

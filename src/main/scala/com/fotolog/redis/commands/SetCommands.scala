@@ -14,7 +14,7 @@ private[redis] trait SetCommands extends ClientCommands {
   import com.fotolog.redis.commands.ClientCommands._
 
   def saddAsync[T](key: String, values: T*)(implicit conv: BinaryConverter[T]): Future[Int] =
-    r.send(Sadd(key, values.map(conv.write):_*)).map(integerResultAsInt)
+    r.send(Sadd(key, values.map(conv.write))).map(integerResultAsInt)
 
   def sadd[T](key: String, values: T*)(implicit conv: BinaryConverter[T]): Int = await { saddAsync(key, values:_*)(conv) }
 
@@ -44,32 +44,32 @@ private[redis] trait SetCommands extends ClientCommands {
     await { sismemberAsync(key, value)(conv) }
 
   def sinterAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Set[T]] =
-    r.send(Sinter(keys: _*)).map(multiBulkDataResultToSet(conv))
+    r.send(Sinter(keys)).map(multiBulkDataResultToSet(conv))
 
   def sinter[T](keys: String*)(implicit conv: BinaryConverter[T]): Set[T] = await { sinterAsync(keys: _*)(conv) }
 
   def sinterstoreAsync[T](destKey: String, keys: String*): Future[Int] =
-    r.send(Sinterstore(destKey, keys: _*)).map(integerResultAsInt)
+    r.send(Sinterstore(destKey, keys)).map(integerResultAsInt)
 
   def sinterstore[T](destKey: String, keys: String*): Int = await { sinterstoreAsync(destKey, keys: _*) }
 
   def sunionAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Set[T]] =
-    r.send(Sunion(keys: _*)).map(multiBulkDataResultToSet(conv))
+    r.send(Sunion(keys)).map(multiBulkDataResultToSet(conv))
 
   def sunion[T](keys: String*)(implicit conv: BinaryConverter[T]): Set[T] = await { sunionAsync(keys: _*)(conv) }
 
   def sunionstoreAsync[T](destKey: String, keys: String*): Future[Int] =
-    r.send(Sunionstore(destKey, keys: _*)).map(integerResultAsInt)
+    r.send(Sunionstore(destKey, keys)).map(integerResultAsInt)
 
   def sunionstore[T](destKey: String, keys: String*): Int = await { sunionstoreAsync(destKey, keys: _*) }
 
   def sdiffAsync[T](keys: String*)(implicit conv: BinaryConverter[T]): Future[Set[T]] =
-    r.send(Sdiff(keys: _*)).map(multiBulkDataResultToSet(conv))
+    r.send(Sdiff(keys)).map(multiBulkDataResultToSet(conv))
 
   def sdiff[T](keys: String*)(implicit conv: BinaryConverter[T]): Set[T] = await { sdiffAsync(keys: _*)(conv) }
 
   def sdiffstoreAsync[T](destKey: String, keys: String*): Future[Int] =
-    r.send(Sdiffstore(destKey, keys: _*)).map(integerResultAsInt)
+    r.send(Sdiffstore(destKey, keys)).map(integerResultAsInt)
 
   def sdiffstore[T](destKey: String, keys: String*): Int = await { sdiffstoreAsync(destKey, keys: _*) }
 

@@ -219,7 +219,7 @@ case class Type(key: String) extends Cmd {
   def asBin = Seq(TYPE, key.getBytes(charset))
 }
 
-case class Del(keys: String*) extends Cmd {
+case class Del(keys: Seq[String]) extends Cmd {
   def asBin = if(keys.length > 1)
     DEL :: keys.toList.map(_.getBytes(charset))
   else Seq(DEL, keys.head.getBytes(charset))
@@ -233,7 +233,7 @@ case class Get(key: String) extends Cmd {
   def asBin = Seq(GET, key.getBytes(charset))
 }
 
-case class MGet(keys: String*) extends Cmd {
+case class MGet(keys: Seq[String]) extends Cmd {
   def asBin = MGET :: keys.toList.map(_.getBytes(charset))
 }
 
@@ -257,11 +257,11 @@ case class SetCmd(key: String,
   }
 }
 
-case class MSet(kvs: (String, Array[Byte])*) extends Cmd {
+case class MSet(kvs: Seq[(String, Array[Byte])]) extends Cmd {
   def asBin = MSET :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
-case class SetNx(kvs: (String, Array[Byte])*) extends Cmd {
+case class SetNx(kvs: Seq[(String, Array[Byte])]) extends Cmd {
   def asBin = MSETNX :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
@@ -356,11 +356,11 @@ case class Hget(key: String, field: String) extends Cmd  {
   def asBin = Seq(HGET, key.getBytes(charset), field.getBytes(charset))
 }
 
-case class Hmget(key: String, fields: String*) extends Cmd {
+case class Hmget(key: String, fields: Seq[String]) extends Cmd {
   def asBin = Seq(HMGET :: key.getBytes(charset) :: fields.toList.map{_.getBytes(charset)}: _*)
 }
 
-case class Hmset(key:String, kvs: (String, Array[Byte])*) extends Cmd {
+case class Hmset(key:String, kvs: Seq[(String, Array[Byte])]) extends Cmd {
   def asBin = Seq(HMSET :: key.getBytes :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
 }
 
@@ -393,7 +393,7 @@ case class Hgetall(key: String) extends Cmd {
 }
 
 // sets
-case class Sadd(key: String, values: Array[Byte]*) extends Cmd {
+case class Sadd(key: String, values: Seq[Array[Byte]]) extends Cmd {
   def asBin = Seq(SADD, key.getBytes(charset)) ++ values
 }
 
@@ -416,27 +416,27 @@ case class Sismember(key: String, v: Array[Byte]) extends Cmd  {
   def asBin = Seq(SISMEMBER, key.getBytes(charset), v)
 }
 
-case class Sinter(keys: String*) extends Cmd {
+case class Sinter(keys: Seq[String]) extends Cmd {
   def asBin = SINTER :: keys.toList.map{_.getBytes(charset)}
 }
 
-case class Sinterstore(destKey: String, keys: String*) extends Cmd {
+case class Sinterstore(destKey: String, keys: Seq[String]) extends Cmd {
   def asBin = SINTERSTORE :: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}
 }
 
-case class Sunion(keys: String*) extends Cmd {
+case class Sunion(keys: Seq[String]) extends Cmd {
   def asBin = SUNION :: keys.toList.map(_.getBytes(charset))
 }
 
-case class Sunionstore(destKey: String, keys: String*) extends Cmd {
+case class Sunionstore(destKey: String, keys: Seq[String]) extends Cmd {
   def asBin = SUNIONSTORE :: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}
 }
 
-case class Sdiff(keys: String*) extends Cmd {
+case class Sdiff(keys: Seq[String]) extends Cmd {
   def asBin = SDIFF :: keys.toList.map{_.getBytes(charset)}
 }
 
-case class Sdiffstore(destKey: String, keys: String*) extends Cmd {
+case class Sdiffstore(destKey: String, keys: Seq[String]) extends Cmd {
   def asBin = SDIFFSTORE :: destKey.getBytes(charset) :: keys.toList.map{_.getBytes(charset)}
 }
 
@@ -449,11 +449,11 @@ case class Srandmember(key: String) extends Cmd {
 }
 
 // scripting
-case class Eval(script: String, kv: (String, Array[Byte])*) extends Cmd {
+case class Eval(script: String, kv: Seq[(String, Array[Byte])]) extends Cmd {
   def asBin = EVAL :: script.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.map { kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
-case class EvalSha(digest: String, kv: (String, Array[Byte])*) extends Cmd {
+case class EvalSha(digest: String, kv: Seq[(String, Array[Byte])]) extends Cmd {
   def asBin = EVALSHA :: digest.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.map{ kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
@@ -467,12 +467,17 @@ case class ScriptExists(script: String) extends Cmd { def asBin = SCRIPT_EXISTS 
 case class Multi() extends Cmd { def asBin = Seq(MULTI) }
 case class Exec() extends Cmd { def asBin = Seq(EXEC) }
 case class Discard() extends Cmd { def asBin = Seq(DISCARD) }
-case class Watch(keys: String*)  extends Cmd { def asBin = WATCH :: keys.map(_.getBytes(charset)).toList }
+case class Watch(keys: Seq[String])  extends Cmd { def asBin = WATCH :: keys.map(_.getBytes(charset)).toList }
 case class Unwatch()  extends Cmd { def asBin = Seq(UNWATCH) }
 
 // pub/sub
-case class Subscribe(channels: Seq[String]) extends Cmd {
+
+case class Subscribe(channels: Seq[String], handler: MultiBulkDataResult => Unit) extends Cmd {
   def asBin = SUBSCRIBE :: channels.toList.map(_.getBytes(charset))
+}
+
+case class Unsubscribe(channels: Seq[String]) extends Cmd {
+  def asBin = UNSUBSCRIBE :: channels.toList.map(_.getBytes(charset))
 }
 
 // utils

@@ -12,8 +12,16 @@ import scala.concurrent.Future
 private[redis] trait PubSubCommands extends ClientCommands {
   import com.fotolog.redis.commands.ClientCommands._
 
-  def subscribe[T](channels: String*)(block: String => Unit)(implicit conv: BinaryConverter[T]): Unit = {
-    r.send(Subscribe(channels)).map(multiBulkDataResultToSet(conv))
+  def subscribe[T](channels: String*)(block: (String, T) => Unit)(implicit conv: BinaryConverter[T]): Unit = {
+    r.send(Subscribe(channels, { bulkResult =>
+      val Seq(_, channel, message) = bulkResult.results
+      val channelName = channel.data.map(BinaryConverter.StringConverter.read).get
+      val data = message.data.map(conv.read).get
+      block(channelName, data)
+    })).map(subscribeResult =>
+        println("Outer Subscribe res: " + subscribeResult)
+      )
   }
 
+  def unsubscribe(channels: String*) = r.send(Unsubscribe(channels))
 }

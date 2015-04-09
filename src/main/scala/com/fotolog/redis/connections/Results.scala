@@ -7,11 +7,15 @@ case class ErrorResult(err: String) extends Result
 case class SingleLineResult(msg: String) extends Result
 case class BulkDataResult(data: Option[Array[Byte]]) extends Result {
   override def toString =
-    "BulkDataResult(%s)".format({ data match { case Some(barr) => new String(barr); case None => "" } })
+    "BulkDataResult(%s)".format(data.map(d => new String(d)).getOrElse(""))
 }
 case class MultiBulkDataResult(results: Seq[BulkDataResult]) extends Result
 
-case class ResultFuture(cmd: Cmd) {
+/**
+ *
+ * @param cmd
+ */
+private[redis] case class ResultFuture(cmd: Cmd) {
   val promise = Promise[Result]()
   def future = promise.future
 }
