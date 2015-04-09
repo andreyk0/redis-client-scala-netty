@@ -2,7 +2,8 @@ package com.fotolog.redis.connections
 
 import java.net.InetSocketAddress
 import java.nio.charset.Charset
-import java.util.concurrent.{ArrayBlockingQueue, Executors, TimeUnit}
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{BlockingQueue, ArrayBlockingQueue, Executors, TimeUnit}
 
 import com.fotolog.redis._
 import org.jboss.netty.bootstrap.ClientBootstrap
@@ -51,14 +52,17 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   private[Netty3RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
   private[Netty3RedisConnection] val opQueue = new ArrayBlockingQueue[ResultFuture](128)
 
+  @volatile
+  private[Netty3RedisConnection] var responseHandler = new AtomicReference[ResultHandler](NormalStateHandler(opQueue))
+
   clientBootstrap.setPipelineFactory(new ChannelPipelineFactory() {
-      override def getPipeline = {
-          val p = Channels.pipeline
-          p.addLast("response_decoder",     new RedisResponseDecoder())
-          p.addLast("response_accumulator", new RedisResponseAccumulator(opQueue))
-          p.addLast("command_encoder",      commandEncoder)
-          p
-      }
+    override def getPipeline = {
+      val p = Channels.pipeline
+      p.addLast("response_decoder",     new RedisResponseDecoder())
+      p.addLast("response_accumulator", new RedisResponseAccumulator(responseHandler))
+      p.addLast("command_encoder",      commandEncoder)
+      p
+    }
   })
 
   clientBootstrap.setOption("tcpNoDelay", true)
@@ -66,13 +70,13 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   clientBootstrap.setOption("connectTimeoutMillis", 1000)
 
   private[Netty3RedisConnection] val channel = {
-      val future = clientBootstrap.connect(new InetSocketAddress(host, port))
-      future.await(1, TimeUnit.MINUTES)
-      if (future.isSuccess) {
-        future.getChannel
-      } else {
-        throw future.getCause
-      }
+    val future = clientBootstrap.connect(new InetSocketAddress(host, port))
+    future.await(1, TimeUnit.MINUTES)
+    if (future.isSuccess) {
+      future.getChannel
+    } else {
+      throw future.getCause
+    }
   }
 
   forceChannelOpen()
@@ -117,12 +121,12 @@ private[redis] class RedisCommandEncoder extends OneToOneEncoder {
     params(0) = ("*" + cmdParts.length + "\r\n").getBytes // num binary chunks
     var i = 1
     for(p <- cmdParts) {
-        params(i) = ("$" + p.length + "\r\n").getBytes // len of the chunk
-        i = i+1
-        params(i) = p
-        i = i+1
-        params(i) = EOL
-        i = i+1
+      params(i) = ("$" + p.length + "\r\n").getBytes // len of the chunk
+      i = i+1
+      params(i) = p
+      i = i+1
+      params(i) = EOL
+      i = i+1
     }
     copiedBuffer(params: _*)
   }
@@ -151,41 +155,38 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
 
     responseType match {
       case Unknown if buf.readable =>
-          responseType = ResponseType(buf.readByte)
-          decode(ctx, ch, buf)
+        responseType = ResponseType(buf.readByte)
+        decode(ctx, ch, buf)
 
       case Unknown if !buf.readable => null // need more data
 
       case BulkData => readAsciiLine(buf) match {
-          case null => null // need more data
-          case line => line.toInt match {
-              case -1 => {
-                  responseType = Unknown
-                  NullData
-              }
-              case n => {
-                  responseType = BinaryData(n)
-                  decode(ctx, ch, buf)
-              }
-          }
+        case null => null // need more data
+        case line => line.toInt match {
+          case -1 =>
+            responseType = Unknown
+            NullData
+          case n =>
+            responseType = BinaryData(n)
+            decode(ctx, ch, buf)
+        }
       }
 
-      case BinaryData(len) => {
-          if (buf.readableBytes >= (len + 2)) { // +2 for eol
-              responseType = Unknown
-              val data = buf.readSlice(len)
-              buf.skipBytes(2) // eol is there too
-              data
-          } else {
-              null // need more data
-          }
-      }
+      case BinaryData(len) =>
+        if (buf.readableBytes >= (len + 2)) { // +2 for eol
+            responseType = Unknown
+            val data = buf.readSlice(len)
+            buf.skipBytes(2) // eol is there too
+            data
+        } else {
+            null // need more data
+        }
 
       case x => readAsciiLine(buf) match {
-          case null => null // need more data
-          case line =>
-              responseType = Unknown
-              (x, line)
+        case null => null // need more data
+        case line =>
+          responseType = Unknown
+          (x, line)
       }
     }
   }
@@ -193,11 +194,10 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
   private def readAsciiLine(buf: ChannelBuffer): String = if (!buf.readable) null else {
     buf.indexOf(buf.readerIndex, buf.writerIndex, EOL_FINDER) match {
       case -1 => null
-      case n => {
+      case n =>
         val line = buf.toString(buf.readerIndex, n-buf.readerIndex, charset)
         buf.skipBytes(line.length + 2)
         line
-      }
     }
   }
 
@@ -206,7 +206,7 @@ private[redis] class RedisResponseDecoder extends FrameDecoder with ChannelExcep
   }
 }
 
-private[redis] class RedisResponseAccumulator(opQueue: ArrayBlockingQueue[ResultFuture]) extends SimpleChannelHandler with ChannelExceptionHandler {
+private[redis] class RedisResponseAccumulator(respHandlerRef: AtomicReference[ResultHandler]) extends SimpleChannelHandler with ChannelExceptionHandler {
   import scala.collection.mutable.ArrayBuffer
 
   val bulkDataBuffer = ArrayBuffer[BulkDataResult]()
@@ -216,22 +216,19 @@ private[redis] class RedisResponseAccumulator(opQueue: ArrayBlockingQueue[Result
   final val EMPTY_MULTIBULK = MultiBulkDataResult(Seq())
 
   override def messageReceived(ctx: ChannelHandlerContext, e: MessageEvent) {
-    // println("accum[%s]: %h -> %s".format(Thread.currentThread.getName, this, e.getMessage))
-
     e.getMessage match {
-      case (resType:ResponseType, line:String) => {
+      case (resType:ResponseType, line:String) =>
         clear()
         resType match {
-          case Error => error(ErrorResult(line))
-          case SingleLine => success(SingleLineResult(line))
-          case Integer => success(BulkDataResult(Some(line.getBytes)))
+          case Error => handleResult(ErrorResult(line))
+          case SingleLine => handleResult(SingleLineResult(line))
+          case Integer => handleResult(BulkDataResult(Some(line.getBytes)))
           case MultiBulkData => line.toInt match {
-              case x if x <= 0 => success(EMPTY_MULTIBULK)
-              case n => numDataChunks = line.toInt // ask for bulk data chunks
+            case x if x <= 0 => handleResult(EMPTY_MULTIBULK)
+            case n => numDataChunks = line.toInt // ask for bulk data chunks
           }
           case _ => throw new Exception("Unexpected %s -> %s".format(resType, line))
         }
-      }
       case data: ChannelBuffer => handleDataChunk(data)
       case NullData => handleDataChunk(null)
       case _ => throw new Exception("Unexpected error: " + e.getMessage)
@@ -256,34 +253,52 @@ private[redis] class RedisResponseAccumulator(opQueue: ArrayBlockingQueue[Result
 
     numDataChunks match {
       case 0 =>
-        success(chunk)
+        handleResult(chunk)
 
       case 1 =>
         bulkDataBuffer += chunk
         val allChunks = new Array[BulkDataResult](bulkDataBuffer.length)
         bulkDataBuffer.copyToArray(allChunks)
         clear()
-        success(MultiBulkDataResult(allChunks))
+        handleResult(MultiBulkDataResult(allChunks))
 
       case _ =>
         bulkDataBuffer += chunk
         numDataChunks  = numDataChunks - 1
-
     }
   }
 
-  private def success(r: Result) {
-    val respFuture = opQueue.poll(60, TimeUnit.SECONDS)
-    respFuture.promise.success(r)
-  }
-
-  private def error(e: ErrorResult): Unit = {
-    val respFuture = opQueue.poll(60, TimeUnit.SECONDS)
-    respFuture.promise.failure(new RedisException(e.err))
+  private def handleResult(r: Result) {
+    respHandlerRef.get().handle(r)
   }
 
   private def clear() {
-      numDataChunks = 0
-      bulkDataBuffer.clear()
+    numDataChunks = 0
+    bulkDataBuffer.clear()
+  }
+}
+
+// Client can go into Subscribed state with reduced commands set and
+// receiving responses without commands
+sealed trait ResultHandler {
+  def handle(r: Result)
+}
+
+case class NormalStateHandler(queue: BlockingQueue[ResultFuture]) extends ResultHandler {
+  def handle(r: Result) = {
+    val respFuture = queue.poll(60, TimeUnit.SECONDS)
+
+    r match {
+      case ErrorResult(err) =>
+        respFuture.promise.failure(new RedisException(err))
+      case r: Result =>
+        respFuture.promise.success(r)
+    }
+  }
+}
+
+class SubscribedStateHandler extends ResultHandler {
+  def handle(r: Result) = {
+    println(r)
   }
 }

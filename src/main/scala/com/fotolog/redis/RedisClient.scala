@@ -26,7 +26,7 @@ object RedisClient {
         val Array(h, p) = host.split(":")
         (h, p.toInt)
       } else {
-        Array(host, port)
+        (host, port)
       }
 
       new RedisClient(new Netty3RedisConnection(aHost, aPort), timeout)
@@ -36,7 +36,7 @@ object RedisClient {
 
 class RedisClient(val r: RedisConnection, val timeout: Duration) extends GenericCommands with StringCommands
                                              with HashCommands with ListCommands
-                                             with SetCommands with ScriptingCommands {
+                                             with SetCommands with ScriptingCommands with PubSubCommands {
 
   def isConnected: Boolean = r.isOpen
   def shutdown() { r.shutdown() }

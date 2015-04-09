@@ -470,6 +470,11 @@ case class Discard() extends Cmd { def asBin = Seq(DISCARD) }
 case class Watch(keys: String*)  extends Cmd { def asBin = WATCH :: keys.map(_.getBytes(charset)).toList }
 case class Unwatch()  extends Cmd { def asBin = Seq(UNWATCH) }
 
+// pub/sub
+case class Subscribe(channels: Seq[String]) extends Cmd {
+  def asBin = SUBSCRIBE :: channels.toList.map(_.getBytes(charset))
+}
+
 // utils
 case class Ping() extends Cmd { def asBin = Seq(PING) }
 case class Info() extends Cmd { def asBin = Seq(INFO) }
