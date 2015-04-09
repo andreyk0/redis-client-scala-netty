@@ -472,6 +472,10 @@ case class Unwatch()  extends Cmd { def asBin = Seq(UNWATCH) }
 
 // pub/sub
 
+case class Publish(channel: String, v: Array[Byte]) extends Cmd {
+  def asBin = Seq(PUBLISH, channel.getBytes(charset), v)
+}
+
 case class Subscribe(channels: Seq[String], handler: MultiBulkDataResult => Unit) extends Cmd {
   def asBin = SUBSCRIBE :: channels.toList.map(_.getBytes(charset))
 }

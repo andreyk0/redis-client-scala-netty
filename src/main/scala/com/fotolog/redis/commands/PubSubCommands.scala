@@ -12,6 +12,11 @@ import scala.concurrent.Future
 private[redis] trait PubSubCommands extends ClientCommands {
   import com.fotolog.redis.commands.ClientCommands._
 
+  def publishAsync[T](channel: String, message: T)(implicit conv: BinaryConverter[T]) =
+    r.send(Publish(channel, conv.write(message))).map(integerResultAsInt)
+
+  def publish[T](channel: String, message: T)(implicit conv: BinaryConverter[T]) = await(publishAsync(channel, message)(conv))
+
   def subscribe[T](channels: String*)(block: (String, T) => Unit)(implicit conv: BinaryConverter[T]): Unit = {
     r.send(Subscribe(channels, { bulkResult =>
       val Seq(_, channel, message) = bulkResult.results
