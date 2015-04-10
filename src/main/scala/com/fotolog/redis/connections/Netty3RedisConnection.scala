@@ -301,20 +301,19 @@ case class NormalConnectionState(queue: BlockingQueue[ResultFuture]) extends Con
         respFuture.promise.failure(new RedisException(err))
         None
       case r: Result =>
+        respFuture.promise.success(r)
+
         respFuture.cmd match {
           case subscribeCmd: Subscribe =>
-            val subscribeHandler = SubscribedConnectionState(this, respFuture, subscribeCmd)
-            subscribeHandler.handle(r)
-            Some(subscribeHandler)
+            Some(SubscribedConnectionState(queue, subscribeCmd))
           case _ =>
-            respFuture.promise.success(r)
             None
         }
     }
   }
 }
 
-case class SubscribedConnectionState(oldState: ConnectionState, subscriptionResult: ResultFuture, subscribeCmd: Subscribe) extends ConnectionState {
+case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscribeCmd: Subscribe) extends ConnectionState {
   final val handler = subscribeCmd.handler
   final val resultsArray = new Array[BulkDataResult](subscribeCmd.channels.size)
 
@@ -322,14 +321,32 @@ case class SubscribedConnectionState(oldState: ConnectionState, subscriptionResu
     try {
       r match {
         case informResult: BulkDataResult =>
-          // subscriptionResult.promise.success(informResult)
           println(">" + informResult)
+
+          val respFuture = queue.poll(60, TimeUnit.SECONDS)
+
+          r match {
+            case ErrorResult(err) =>
+              respFuture.promise.failure(new RedisException(err))
+              None
+            case r: Result =>
+              respFuture.promise.success(r)
+
+              respFuture.cmd match {
+                case subscribeCmd: Unsubscribe =>
+                  Some(NormalConnectionState(queue))
+                case _ =>
+                  None
+              }
+          }
 
         case messageResult: MultiBulkDataResult =>
           handler(messageResult)
+          None
+        case any =>
+          println("u>" + any)
+          None
       }
-
-      None
     } catch {
       case e: Exception =>
         e.printStackTrace()

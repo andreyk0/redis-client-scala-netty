@@ -13,12 +13,16 @@ class PubSubTest {
   // @After def tearDown() { c.flushall }
 
   @Test def testPublish() {
-    c.publish[String]("baz", "message-test")
+    c.publish[String]("test", "message-test")
   }
 
   @Test  def testSubscribe() {
-    c.subscribe[String]("baz", "foo") { (x, y) =>
-      println("Got data from channels: " + x + ":" + y)
+    c.subscribe[String]("baz") { (x, y) =>
+      println("Got data from channels1: " + x + ":" + y)
     }
+
+    c.unsubscribe("baz")
+
+    c.set("key", "test")
   }
 }
