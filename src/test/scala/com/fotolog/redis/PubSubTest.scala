@@ -3,6 +3,9 @@ package com.fotolog.redis
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 /**
  * Created by sergeykhruschak on 4/9/15.
  */
@@ -12,17 +15,25 @@ class PubSubTest {
   // @Before def setUp() { c.flushall }
   // @After def tearDown() { c.flushall }
 
-  @Test def testPublish() {
-    c.publish[String]("test", "message-test")
-  }
+  //@Test def testPublish() {
+  //  c.publish[String]("test", "message-test")
+  //}
 
   @Test  def testSubscribe() {
-    c.subscribe[String]("baz") { (x, y) =>
-      println("Got data from channels1: " + x + ":" + y)
+    val subscriptionRes= c.subscribe[String]("baz", "bar", "gee") { (channel, msg) =>
+      println("Subscriber1: Got data from channel " + channel + ":" + msg)
     }
 
-    c.unsubscribe("baz")
+    assertEquals(Seq(1, 2, 3), subscriptionRes)
 
-    c.set("key", "test")
+    c.subscribe[String]("baz", "tee") { (channel, msg) =>
+      println("Subscriber2: Got data from channel " + channel + ":" + msg)
+    }
+
+    Thread.sleep(690000L)
+
+    assertEquals(Seq(2, 1, 1), c.unsubscribe("baz", "gee", "fee"))
+
+    // c.set("key", "test")
   }
 }

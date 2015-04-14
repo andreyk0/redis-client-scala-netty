@@ -17,18 +17,20 @@ private[redis] trait PubSubCommands extends ClientCommands {
 
   def publish[T](channel: String, message: T)(implicit conv: BinaryConverter[T]) = await(publishAsync(channel, message)(conv))
 
-  def subscribe[T](channels: String*)(block: (String, T) => Unit)(implicit conv: BinaryConverter[T]): Unit = {
+  def subscribeAsync[T](channels: String*)(block: (String, T) => Unit)(implicit conv: BinaryConverter[T]): Future[Seq[Int]] = {
     r.send(Subscribe(channels, { bulkResult =>
       val Seq(_, channel, message) = bulkResult.results
       val channelName = channel.data.map(BinaryConverter.StringConverter.read).get
       val data = message.data.map(conv.read).get
       block(channelName, data)
-    })).map(subscribeResult =>
-        println("Outer Subscribe res: " + subscribeResult)
-      )
+    })).map { multiBulkDataResultToFilteredSeq(BinaryConverter.IntConverter) }
   }
 
-  def unsubscribeAsync(channels: String*) = r.send(Unsubscribe(channels)).map(integerResultAsInt)
+  def subscribe[T](channels: String*)(block: (String, T) => Unit)(implicit conv: BinaryConverter[T]): Seq[Int] =
+    await(subscribeAsync(channels:_*)(block)(conv))
+
+  def unsubscribeAsync(channels: String*): Future[Seq[Int]] =
+    r.send(Unsubscribe(channels)).map(multiBulkDataResultToFilteredSeq(BinaryConverter.IntConverter))
 
   def unsubscribe(channels: String*) = await(unsubscribeAsync(channels:_*))
 }

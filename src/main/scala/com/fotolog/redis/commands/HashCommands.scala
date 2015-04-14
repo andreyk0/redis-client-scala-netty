@@ -23,13 +23,13 @@ private[redis] trait HashCommands extends ClientCommands {
   def hget[T](key: String, field: String)(implicit conv: BinaryConverter[T]): Option[T] = await { hgetAsync(key, field)(conv) }
 
   def hmgetAsync[T](key: String, fields: String*)(implicit conv: BinaryConverter[T]): Future[Map[String,T]] =
-    r.send(Hmget(key, fields: _*)).map(multiBulkDataResultToMap(fields, conv))
+    r.send(Hmget(key, fields)).map(multiBulkDataResultToMap(fields, conv))
 
   def hmget[T](key: String, fields: String*)(implicit conv: BinaryConverter[T]): Map[String,T] =
     await { hmgetAsync(key, fields: _*)(conv) }
 
   def hmsetAsync[T](key: String, kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Future[Boolean] =
-    r.send(Hmset(key, kvs.map{kv => kv._1 -> conv.write(kv._2)} : _*)).map(okResultAsBoolean)
+    r.send(Hmset(key, kvs.map{kv => kv._1 -> conv.write(kv._2)})).map(okResultAsBoolean)
 
   def hmset[T](key: String, kvs: (String,T)*)(implicit conv: BinaryConverter[T]): Boolean = await { hmsetAsync(key, kvs: _*)(conv) }
 

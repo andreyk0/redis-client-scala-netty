@@ -14,6 +14,7 @@ import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
 import org.jboss.netty.handler.codec.frame.FrameDecoder
 import org.jboss.netty.handler.codec.oneone.OneToOneEncoder
 
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
@@ -80,7 +81,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   forceChannelOpen()
 
   def send(cmd: Cmd): Future[Result] = {
-    val f = new ResultFuture(cmd)
+    val f = ResultFuture(cmd)
     cmdQueue.offer((this, f), 10, TimeUnit.SECONDS)
     f.future
   }
@@ -269,7 +270,11 @@ private[redis] class RedisResponseAccumulator(connStateRef: AtomicReference[Conn
   private def handleResult(r: Result) {
     val nextStateOpt = connStateRef.get().handle(r)
 
-    for(nextState <- nextStateOpt) connStateRef.set(nextState)
+    for(nextState <- nextStateOpt) {
+      println("switching to new state: " + nextState.getClass.getSimpleName)
+      connStateRef.set(nextState)
+      // nextState.handle(r)
+    }
   }
 
   private def clear() {
@@ -282,7 +287,30 @@ private[redis] class RedisResponseAccumulator(connStateRef: AtomicReference[Conn
  * Connection can go into Subscribed state with reduced commands set and
  * receiving responses without commands
  */
-sealed trait ConnectionState {
+sealed abstract class ConnectionState(queue: BlockingQueue[ResultFuture]) {
+
+  var currentComplexResponse: Option[ResultFuture] = None
+
+  def nextResultFuture() = currentComplexResponse getOrElse queue.poll(60, TimeUnit.SECONDS)
+
+  def fillResult(r: Result): ResultFuture = {
+    val nextFuture = currentComplexResponse getOrElse queue.poll(60, TimeUnit.SECONDS)
+
+    nextFuture.fillWithResult(r)
+
+    if(!nextFuture.complete) {
+      currentComplexResponse = Some(nextFuture)
+    } else {
+      currentComplexResponse = None
+    }
+
+    nextFuture
+  }
+
+  def fillError(err: ErrorResult) = {
+    nextResultFuture().fillWithFailure(err)
+    currentComplexResponse = None
+  }
 
   /**
    * Handles results got from socket. Optionally can return new connection state.
@@ -292,59 +320,68 @@ sealed trait ConnectionState {
   def handle(r: Result): Option[ConnectionState]
 }
 
-case class NormalConnectionState(queue: BlockingQueue[ResultFuture]) extends ConnectionState {
-  def handle(r: Result): Option[ConnectionState] = {
-    val respFuture = queue.poll(60, TimeUnit.SECONDS)
+case class NormalConnectionState(queue: BlockingQueue[ResultFuture]) extends ConnectionState(queue) {
+  def handle(r: Result): Option[ConnectionState] = r match {
+    case err: ErrorResult =>
+      fillError(err)
+      None
+    case r: Result =>
+      val respFuture = fillResult(r)
 
-    r match {
-      case ErrorResult(err) =>
-        respFuture.promise.failure(new RedisException(err))
-        None
-      case r: Result =>
-        respFuture.promise.success(r)
-
-        respFuture.cmd match {
-          case subscribeCmd: Subscribe =>
-            Some(SubscribedConnectionState(queue, subscribeCmd))
-          case _ =>
-            None
-        }
-    }
+      respFuture.cmd match {
+        case subscribeCmd: Subscribe if respFuture.complete =>
+          Some(SubscribedConnectionState(queue, subscribeCmd))
+        case _ =>
+          None
+      }
   }
 }
 
-case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscribeCmd: Subscribe) extends ConnectionState {
-  final val handler = subscribeCmd.handler
-  final val resultsArray = new Array[BulkDataResult](subscribeCmd.channels.size)
+case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscribe: Subscribe) extends ConnectionState(queue) {
+
+  type Subscriber = MultiBulkDataResult => Unit
+
+  val subscribers = new ListBuffer[(String, Subscriber)]() ++ extractSubscribers(subscribe)
 
   def handle(r: Result): Option[ConnectionState] = {
     try {
       r match {
-        case informResult: BulkDataResult =>
-          println(">" + informResult)
-
-          val respFuture = queue.poll(60, TimeUnit.SECONDS)
-
+        case cmdResult: BulkDataResult =>
           r match {
-            case ErrorResult(err) =>
-              respFuture.promise.failure(new RedisException(err))
+            case err: ErrorResult =>
+              fillError(err)
               None
             case r: Result =>
-              respFuture.promise.success(r)
+              val respFuture = fillResult(r)
 
-              respFuture.cmd match {
-                case subscribeCmd: Unsubscribe =>
-                  Some(NormalConnectionState(queue))
-                case _ =>
-                  None
+              if(respFuture.complete) {
+                respFuture.cmd match {
+                  case subscribeCmd: Subscribe =>
+                    subscribers ++= extractSubscribers(subscribeCmd)
+                    None
+
+                  case unsubscribeCmd: Unsubscribe =>
+                    //subscribers.filter()
+                    None
+                  case _ =>
+                    None
+                }
+
+              } else {
+                None
               }
           }
 
-        case messageResult: MultiBulkDataResult =>
-          handler(messageResult)
+        case message: MultiBulkDataResult =>
+          val channel = message.results(1).data.map(new String(_)).get
+
+          subscribers.foreach { case (pattern, handler) =>
+            if(channel.matches(pattern)) handler(message)
+          }
+
           None
         case any =>
-          println("u>" + any)
+          new RuntimeException("Unsupported response from server in subsribed mode")
           None
       }
     } catch {
@@ -352,5 +389,9 @@ case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscri
         e.printStackTrace()
         None
     }
+  }
+
+  private def extractSubscribers(cmd: Subscribe) = {
+    cmd.channels.map( p => (p.replace("*", ".*?").replace("?", ".?"), cmd.handler) )
   }
 }

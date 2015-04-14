@@ -207,21 +207,6 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
   private[this] def optVal(key: String) = Option(map.get(key))
 
-  /* Stub for concurrent version
-  @tailrec
-  private[this] def mapSubHashField(key: String, field: String, fn: Option[Array[Byte]] => Array[Byte]): Unit = {
-    val orig = map.get(key)
-    val updated = Option(orig).map(_.asMap)
-                    .map { submap => submap.updated(field, fn(submap.get(field))) }
-                    .getOrElse { Map[String, Array[Byte]](field -> fn(None)) }
-
-    val old = map.replace(key, Data.hash(updated))
-
-    if(orig != old) {
-      mapSubHashField(key, field, fn)
-    }
-  } */
-
   override def isOpen: Boolean = true
 
   override def shutdown() {}
