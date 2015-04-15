@@ -7,7 +7,7 @@ import scala.collection.Set
 import scala.concurrent.Future
 
 private[redis] trait ClientCommands {
-  val r: RedisConnection
+  protected val r: RedisConnection
 
   def await[T](f: Future[T]): T
 }

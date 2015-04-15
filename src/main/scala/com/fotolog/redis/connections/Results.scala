@@ -15,8 +15,9 @@ case class BulkDataResult(data: Option[Array[Byte]]) extends Result {
 case class MultiBulkDataResult(results: Seq[BulkDataResult]) extends Result
 
 /**
- *
- * @param cmd
+ * Holds command and promise for response for that command.
+ * Promise will be satisfied after response from server for that command.
+ * @param cmd command that waits for result.
  */
 private[redis] class ResultFuture(val cmd: Cmd) {
   val promise = Promise[Result]()
@@ -28,16 +29,22 @@ private[redis] class ResultFuture(val cmd: Cmd) {
   def complete: Boolean = true
 }
 
+
+/**
+ * ResultFuture that contains command which receives multiple responses.
+ * Used when dealing with Subscribe/Unsubscribe commands which forces server to
+ * respond with multiple BulkDataResults which here are packaged into MultiBulkDataResults.
+ *
+ * @param complexCmd command to handle response for
+ * @param parts number of parts that command expects
+ */
 private[redis] case class ComplexResultFuture(complexCmd: Cmd, parts: Int) extends ResultFuture(complexCmd) {
   val responses = new ListBuffer[BulkDataResult]()
-
-  println("Created complex result with parts: " + parts)
 
   override def fillWithResult(r: Result) = {
     responses += r.asInstanceOf[BulkDataResult]
 
     if(responses.length == parts) {
-      println("Filled complex response")
       promise.success(MultiBulkDataResult(responses.toSeq))
       true
     } else {
