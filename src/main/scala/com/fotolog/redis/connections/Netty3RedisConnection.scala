@@ -14,7 +14,6 @@ import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
 import org.jboss.netty.handler.codec.frame.FrameDecoder
 import org.jboss.netty.handler.codec.oneone.OneToOneEncoder
 
-import scala.collection.mutable.ListBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 

@@ -8,7 +8,6 @@ import scala.concurrent.Future
 
 private[redis] trait ClientCommands {
   protected val r: RedisConnection
-
   def await[T](f: Future[T]): T
 }
 

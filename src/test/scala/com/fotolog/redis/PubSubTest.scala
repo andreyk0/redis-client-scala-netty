@@ -76,7 +76,7 @@ class PubSubTest {
 
 
   private def publishMsg(channel: String, msg: String) {
-    assertEquals(2, RedisClient().publish(channel, msg))
+    assertEquals(1, RedisClient().publish(channel, msg))
   }
 
 }

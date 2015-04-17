@@ -34,7 +34,7 @@ object RedisClient {
 
 }
 
-class RedisClient(protected val r: RedisConnection, val timeout: Duration) extends GenericCommands with StringCommands
+class RedisClient(val r: RedisConnection, val timeout: Duration) extends GenericCommands with StringCommands
                                              with HashCommands with ListCommands
                                              with SetCommands with ScriptingCommands with PubSubCommands {
 
