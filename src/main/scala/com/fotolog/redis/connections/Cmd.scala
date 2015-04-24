@@ -477,11 +477,13 @@ case class Publish(channel: String, v: Array[Byte]) extends Cmd {
 }
 
 case class Subscribe(channels: Seq[String], handler: MultiBulkDataResult => Unit) extends Cmd {
-  def asBin = SUBSCRIBE :: channels.toList.map(_.getBytes(charset))
+  def asBin =
+    (if(channels.exists(s => s.contains("*") || s.contains("?"))) PSUBSCRIBE else SUBSCRIBE) :: channels.toList.map(_.getBytes(charset))
 }
 
 case class Unsubscribe(channels: Seq[String]) extends Cmd {
-  def asBin = UNSUBSCRIBE :: channels.toList.map(_.getBytes(charset))
+  def asBin =
+    (if(channels.exists(s => s.contains("*") || s.contains("?"))) PUNSUBSCRIBE else UNSUBSCRIBE) :: channels.toList.map(_.getBytes(charset))
 }
 
 // utils

@@ -25,10 +25,10 @@ class PubSubTest {
   @Test def testSubscribe() {
     val latch = new CountDownLatch(1)
     var receivedMessage = false
+    var messageData = "not used"
 
     val subscriptionRes = c.subscribe[String]("baz", "test") { (channel, msg) =>
-      assertEquals("test", channel)
-      assertEquals("message", msg)
+      messageData = msg
       receivedMessage = true
       latch.countDown()
     }
@@ -43,10 +43,30 @@ class PubSubTest {
     publishMsg("test", "message")
 
     latch.await(5, TimeUnit.SECONDS)
-    Thread.sleep(200)
+    Thread.sleep(300) // wait for second response
 
     assertTrue(receivedMessage)
     assertFalse(receivedMessage2)
+    assertEquals("message", messageData)
+  }
+
+
+  @Test def testPsubscribe() {
+    val latch = new CountDownLatch(1)
+    var receivedMessage = false
+
+    val subscriptionRes = c.subscribe[String]("glob*") { (channel, msg) =>
+      receivedMessage = true
+      latch.countDown()
+    }
+
+    assertEquals(Seq(1), subscriptionRes)
+
+    publishMsg("global", "message")
+
+    latch.await(5, TimeUnit.SECONDS)
+
+    assertTrue(receivedMessage)
   }
 
 

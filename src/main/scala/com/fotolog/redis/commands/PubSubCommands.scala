@@ -19,10 +19,21 @@ private[redis] trait PubSubCommands extends ClientCommands {
 
   def subscribeAsync[T](channels: String*)(block: (String, T) => Unit)(implicit conv: BinaryConverter[T]): Future[Seq[Int]] = {
     r.send(Subscribe(channels, { bulkResult =>
-      val Seq(_, channel, message) = bulkResult.results
-      val channelName = channel.data.map(BinaryConverter.StringConverter.read).get
-      val data = message.data.map(conv.read).get
-      block(channelName, data)
+      val (channelBin, dataBin) = bulkResult.results match {
+        case Seq(_, channelBin, messageBin) =>
+          (channelBin, messageBin)
+        case Seq(_, channelPatternBin, channelBin, messageBin) =>
+          (channelBin, messageBin)
+      }
+
+      val channelName = channelBin.data.map(BinaryConverter.StringConverter.read).get
+
+      try{
+        block(channelName, dataBin.data.map(conv.read).get)
+      } catch {
+        case e: Exception =>
+          e.printStackTrace()
+      }
     })).map { multiBulkDataResultToFilteredSeq(BinaryConverter.IntConverter) }
   }
 

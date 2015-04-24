@@ -267,10 +267,15 @@ private[redis] class RedisResponseAccumulator(connStateRef: AtomicReference[Conn
   }
 
   private def handleResult(r: Result) {
-    val nextStateOpt = connStateRef.get().handle(r)
+    try {
+      val nextStateOpt = connStateRef.get().handle(r)
 
-    for(nextState <- nextStateOpt) {
-      connStateRef.set(nextState)
+      for(nextState <- nextStateOpt) {
+        connStateRef.set(nextState)
+      }
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
     }
   }
 
@@ -380,7 +385,7 @@ case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscri
         val channel = message.results(1).data.map(new String(_)).get
 
         subscribers.foreach { case (pattern, handler) =>
-          if(channel.matches(pattern)) handler(message)
+          if(channel == pattern) handler(message)
         }
       case other =>
         new RuntimeException("Unsupported response from server in subscribed mode: " + other)
@@ -391,7 +396,7 @@ case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscri
 
   private def processUnsubscribe(channels: Seq[String]) = {
     subscribers = subscribers.filterNot { case (channel, _) =>
-      channels.exists(p => patternToRegExp(p) == channel)
+      channels.contains(channel)
     }
 
     if(subscribers.isEmpty) {
@@ -402,7 +407,6 @@ case class SubscribedConnectionState(queue: BlockingQueue[ResultFuture], subscri
   }
 
   private def extractSubscribers(cmd: Subscribe) =
-    cmd.channels.map(p => (patternToRegExp(p), cmd.handler))
+    cmd.channels.map(p => (p, cmd.handler))
 
-  private def patternToRegExp(p: String) = p.replace("*", ".*?").replace("?", ".?")
 }
