@@ -25,6 +25,7 @@ Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH AL
 
 ## Example usage with scala REPL
 
+```scala
     import com.fotolog.redis.{RedisCluster, RedisClient, RedisHost}
 
     val shardingHashFun = (s:String)=>s.hashCode // shard on string values
@@ -66,12 +67,12 @@ Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH AL
     val resultsList = c.eval[Int]("return ARGV[1];", ("anyKey", "2"))
     val scriptHash = c.scriptLoad("return ARGV[1];")
     val evalResultsList = c.evalsha[Int](scriptHash, ("key", "4"))
-
+```
 
 ## Example of adding custom conversion objects
  
  Conversion is implemented using BinaryConverter interface.
-
+```scala
     import com.google.protobuf.{CodedOutputStream,CodedInputStream}
 
     implicit val intProtobufConverter = new BinaryConverter[Int]() {
@@ -87,12 +88,12 @@ Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH AL
             barr
         }
     }
-
+```
 
 Conversion objects can be passed explicitly:
- 
+```scala 
     c.set("key-name", 15)(intProtobufConverter)
-    
+```    
  
 ## In-memory client usage
 
@@ -100,14 +101,16 @@ It is not necessary now to run standalone redis server for developing or unit te
 client to do perform all operations in memory. Also it is possible to emulate several databases at once. The behaviour is
 similar to in-memory databases in popular embeddable RDMS like H2 or HyperSQL. Following creates in-memory database `test`:
 
+```scala
     val c = RedisClient("mem:test")
+```
 
 Note: feature is in active development so only basic operations are supported now.
 
 ## Redlock usage
-Distributed lock implementation on multiple (or one) redis instances. Based on algorithm described  ([here](http://redis.io/topics/distlock)).
+Redlock is a distributed lock implementation on multiple (or one) redis instances based on algorithm described  ([here](http://redis.io/topics/distlock)).
 Usage example:
-
+```scala
     val redlock = Redlock("192.168.2.11" -> 6379, "192.168.2.12" -> 6379, "192.168.2.13" -> 6379)
     
     val lock = redlock.lock("resource-name", ttl = 60)
@@ -115,18 +118,21 @@ Usage example:
     if(lock.successful) {
         /* Some code that has to be executed only on one instance/thread. */
     }
-    
-    
+```
+
 One have to specify some name common for all application instances. In case of success `lock` method returns object that contains resource name and some random vaalue that should be used to unlock resource:
 
     redlock.unlock(lock)
 
 Manual unlocking is not always necessary as lock will be unlocked automatically on Redis server after `ttl` seconds will pass.
+
 Also there is convenient `withLock` method:
 
+```scala
     val redlock = Redlock("192.168.2.15")
     redlock.withLock("resource-name") {
         /* Some code that has to be executed only on one instance/thread. */
     }
+```
 
 Redlock is fully supported by in-memory client.
