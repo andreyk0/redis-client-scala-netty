@@ -1,5 +1,7 @@
 package com.fotolog.redis
 
+import java.util.concurrent.{TimeUnit, CountDownLatch}
+
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -120,12 +122,31 @@ class InMemoryClientTest {
     assertEquals("Resulting set has to contain all elements", Set("tennis", "hockey", "football"), c.smembers[String]("sport"))
   }
 
-  @Test def testScript() {
+  @Test def testRedlockScript() {
     import com.fotolog.redis.primitives.Redlock._
 
     assertTrue(c.set("redlock:key", "redlock:value"))
     assertEquals("Should not unlock redis server with nonexistent value", Set(0), c.eval[Int](UNLOCK_SCRIPT, "redlock:key" -> "non:value"))
     assertEquals("Should unlock redis server", Set(1), c.eval[Int](UNLOCK_SCRIPT, "redlock:key" -> "redlock:value"))
+
+  }
+
+  @Test def testPubSub() {
+    val latch = new CountDownLatch(1)
+    var invoked = false
+
+    val subscribtionRes = RedisClient("mem:test").subscribe[String]("f*", "foo", "f*", "bar") { (channel, msg) =>
+      invoked = true
+      latch.countDown()
+    }
+
+    assertEquals(Seq(1, 2, 2, 3), subscribtionRes)
+
+    c.publish("fee", "message")
+
+    latch.await(5, TimeUnit.SECONDS)
+
+    assertTrue(invoked)
 
   }
 }

@@ -162,8 +162,13 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
     // Pub/Sub
 
     case s: Subscribe =>
-      server.pubSub ++= s.channels.map(p => (this, p, s))
-      MultiBulkDataResult(s.channels.map(_ => int2res(1))) // TODO: count subscriptions
+      val subscriptions = s.channels.map { ptrn =>
+        val tuple = (this, ptrn, s)
+        server.pubSub += tuple
+        int2res(server.countUnique(this))
+      }
+
+      MultiBulkDataResult(subscriptions)
 
     case Publish(channel, data) =>
       val subscribers = server.matchingSubscribers(channel)
@@ -286,4 +291,5 @@ private[connections] case class FakeServer(
     case (connection, pattern, subscription) => channel.matches(pattern.replace("*", ".*?").replace("?", ".?"))
   }
 
+  def countUnique(connection: RedisConnection) = pubSub.filter(_._1 == connection).map(_._2).toSet.size
 }
