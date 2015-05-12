@@ -17,7 +17,7 @@ class InMemoryClientTest {
     assertTrue(c.ping())
   }
 
-  @Test def testPingGetSetExistsType() {
+  @Test def testGetSetExistsType() {
     assertFalse(c.exists("foo"))
     assertTrue(c.set("foo", "bar", 2592000))
 
@@ -40,6 +40,14 @@ class InMemoryClientTest {
     assertFalse("Key should not exist", c.exists("foo"))
 
     assertEquals("No keys has to be deleted", 0, c.del("foo"))
+
+    // rename
+    assertTrue("Rename should succeed", c.rename("baz", "rbaz"))
+    assertFalse(c.exists("baz"))
+    assertEquals(Some("bar"), c.get[String]("rbaz"))
+
+    // rename nx
+    assertFalse("Rename to existent key should do nothing", c.rename("rbaz", "buzzword", true))
   }
 
   @Test def testStringCommands(): Unit = {
@@ -47,6 +55,11 @@ class InMemoryClientTest {
     assertEquals(11, c.incr("foo", 10))
     assertEquals(0, c.incr("foo", -11))
     assertEquals(-5, c.incr("unexistent", -5))
+  }
+
+  @Test(expected = classOf[RedisException])
+  def testRenameFailure() {
+    c.rename("non-existent", "newkey")
   }
 
   @Test(expected = classOf[RedisException])
@@ -64,6 +77,10 @@ class InMemoryClientTest {
     assertEquals("Ttl if not set should equal -1", -1, c.ttl("baz"))
 
     assertEquals("Ttl of nonexistent entity has to be -2", -2, c.ttl("bar"))
+
+    assertTrue(c.set("bee", "test", 100))
+    assertTrue(c.persist("bee"))
+    assertEquals("Ttl of persisted should equal -1", -1, c.ttl("bee"))
   }
 
   @Test def testHash() {

@@ -6,37 +6,12 @@ import java.util.concurrent.{ConcurrentHashMap, Executors}
 import com.fotolog.redis.{RedisException, KeyType}
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable.ListBuffer
 import scala.compat.Platform
 import scala.concurrent.{ExecutionContext, Future}
 
-sealed case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.String, stamp: Long = Platform.currentTime) {
-  def asBytes = keyType match {
-    case KeyType.String => v.asInstanceOf[Array[Byte]]
-    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
-  }
-
-  def asMap = keyType match {
-    case KeyType.Hash => v.asInstanceOf[Map[String, Array[Byte]]]
-    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
-  }
-
-  def asSet = keyType match {
-    case KeyType.Set => v.asInstanceOf[Set[BytesWrapper]]
-    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
-  }
-
-  def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000L)
-  def secondsLeft = if (ttl == -1) -1 else (ttl - (Platform.currentTime - stamp) / 1000).toInt
-}
-
-private object Data {
-  def str(d: Array[Byte], ttl: Int = -1) = Data(d, ttl, keyType = KeyType.String)
-  def hash(map: Map[String, Array[Byte]], ttl: Int = -1) = Data(map, ttl, keyType = KeyType.Hash)
-  def set(set: Set[BytesWrapper], ttl: Int = -1) = Data(set, ttl, keyType = KeyType.Set)
-}
-
 object InMemoryRedisConnection {
-  val fakeServers = new ConcurrentHashMap[String, ConcurrentHashMap[String, Data]]
+  private[connections] val fakeServers = new ConcurrentHashMap[String, FakeServer]
 
   val context = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor)
 
@@ -45,7 +20,7 @@ object InMemoryRedisConnection {
       val servers = fakeServers.elements()
 
       while(servers.hasMoreElements) {
-        val map = servers.nextElement()
+        val map = servers.nextElement().map
 
         val it = map.entrySet.iterator
         while (it.hasNext) {
@@ -54,6 +29,9 @@ object InMemoryRedisConnection {
       }
     }
   }
+
+  private[connections] val ok = SingleLineResult("OK")
+  private[connections] val bulkNull = BulkDataResult(None)
 }
 
 /**
@@ -63,8 +41,9 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   import com.fotolog.redis.connections.InMemoryRedisConnection._
   import com.fotolog.redis.connections.ErrMessages._
 
-  fakeServers.putIfAbsent(dbName, new ConcurrentHashMap[String, Data]())
-  val map = fakeServers.get(dbName)
+  fakeServers.putIfAbsent(dbName, FakeServer())
+  val server = fakeServers.get(dbName)
+  val map = server.map
 
   override def send(cmd: Cmd): Future[Result] = {
     context.execute(cleaner)
@@ -110,11 +89,27 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
         optVal(key) map ( _.keyType.name ) getOrElse KeyType.None.name
       )
 
+    case Persist(key) =>
+      int2res(optVal(key) map { d => map.put(key, d.copy(ttl = -1)); 1 } getOrElse 0)
+
     case Ttl(key) =>
       int2res(optVal(key) map (_.secondsLeft) getOrElse -2)
 
     case d: Del =>
       d.keys.count(k => Option(map.remove(k)).isDefined)
+
+    case Rename(key, newKey, nx) =>
+      optVal(key) match {
+        case Some(v) =>
+          if(nx && optVal(newKey).exists(!_.expired)) int2res(0)
+          else {
+            map.remove(key)
+            map.put(newKey, v)
+            int2res(1)
+          }
+        case None =>
+          throw new RedisException(ERR_NO_SUCH_KEY)
+      }
 
     // hash commands
 
@@ -164,6 +159,30 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
         MultiBulkDataResult(data.asSet.map(wrapper => bytes2res(wrapper.bytes)).toSeq)
       ) getOrElse MultiBulkDataResult(Seq())
 
+    // Pub/Sub
+
+    case s: Subscribe =>
+      server.pubSub ++= s.channels.map(p => (this, p, s))
+      MultiBulkDataResult(s.channels.map(_ => int2res(1))) // TODO: count subscriptions
+
+    case Publish(channel, data) =>
+      val subscribers = server.matchingSubscribers(channel)
+
+      subscribers.foreach {
+        case (conn, pattern, subscribe) if subscribe.hasPattern =>
+          subscribe.handler(MultiBulkDataResult(Seq(
+            str2res("pmessage"), str2res(pattern), str2res(channel), bytes2res(data)
+          )))
+        case (conn, pattern, subscribe) =>
+          subscribe.handler(MultiBulkDataResult(Seq(
+            str2res("message"), str2res(channel), bytes2res(data)
+          )))
+      }
+
+      subscribers.length
+
+    // scripting
+
     case eval: Eval =>
       import com.fotolog.redis.primitives.Redlock._
 
@@ -190,7 +209,7 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
 
   }
 
-  private[this] implicit def int2res(v: Int): Result = BulkDataResult(Some(v.toString.getBytes))
+  private[this] implicit def int2res(v: Int): BulkDataResult = BulkDataResult(Some(v.toString.getBytes))
 
   private[this] def bytes2int(b: Array[Byte], msg: String) = try {
     new String(b).toInt
@@ -200,11 +219,8 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   }
 
   private[this] def bytes2res(a: Array[Byte]) = BulkDataResult(Some(a))
+  private[this] def str2res(s: String) = BulkDataResult(Some(s.getBytes))
   private[this] def int2bytes(i: Int): Array[Byte] = i.toString.getBytes
-
-  private[this] val ok = SingleLineResult("OK")
-  private[this] val bulkNull = BulkDataResult(None)
-
   private[this] def optVal(key: String) = Option(map.get(key))
 
   override def isOpen: Boolean = true
@@ -226,10 +242,48 @@ case class BytesWrapper(bytes: Array[Byte]) {
 
 }
 
-
 private object ErrMessages {
   val ERR_INVALID_NUMBER = "ERR value is not an integer or out of range"
   val ERR_INVALID_HASH_NUMBER = "ERR hash value is not an integer"
   val ERR_INVALID_TYPE = "WRONGTYPE Operation against a key holding the wrong kind of value"
   val ERR_UNSUPPORTED_SCRIPT= "ERR Operation not support for script:"
+  val ERR_NO_SUCH_KEY = "ERR no such key"
+  val ERR_SUBSCRIBE_MODE = "ERR only (P)SUBSCRIBE / (P)UNSUBSCRIBE / QUIT allowed in this context"
+}
+
+private[connections] case class Data(v: AnyRef, ttl: Int = -1, keyType: KeyType = KeyType.String, stamp: Long = Platform.currentTime) {
+  def asBytes = keyType match {
+    case KeyType.String => v.asInstanceOf[Array[Byte]]
+    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
+  }
+
+  def asMap = keyType match {
+    case KeyType.Hash => v.asInstanceOf[Map[String, Array[Byte]]]
+    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
+  }
+
+  def asSet = keyType match {
+    case KeyType.Set => v.asInstanceOf[Set[BytesWrapper]]
+    case _ => throw new RedisException(ErrMessages.ERR_INVALID_TYPE)
+  }
+
+  def expired = ttl != -1 && Platform.currentTime - stamp > (ttl * 1000L)
+  def secondsLeft = if (ttl == -1) -1 else (ttl - (Platform.currentTime - stamp) / 1000).toInt
+}
+
+private[connections] object Data {
+  def str(d: Array[Byte], ttl: Int = -1) = Data(d, ttl, keyType = KeyType.String)
+  def hash(map: Map[String, Array[Byte]], ttl: Int = -1) = Data(map, ttl, keyType = KeyType.Hash)
+  def set(set: Set[BytesWrapper], ttl: Int = -1) = Data(set, ttl, keyType = KeyType.Set)
+}
+
+private[connections] case class FakeServer(
+  map: ConcurrentHashMap[String, Data] = new ConcurrentHashMap[String, Data](),
+  pubSub: ListBuffer[(RedisConnection, String, Subscribe)] = ListBuffer.empty
+) {
+
+  def matchingSubscribers(channel: String) = pubSub.filter {
+    case (connection, pattern, subscription) => channel.matches(pattern.replace("*", ".*?").replace("?", ".?"))
+  }
+
 }
