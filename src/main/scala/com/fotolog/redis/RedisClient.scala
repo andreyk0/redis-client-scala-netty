@@ -7,7 +7,6 @@ import com.fotolog.redis.connections.{InMemoryRedisConnection, Netty3RedisConnec
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-import scala.util.Try
 
 object RedisClient {
 

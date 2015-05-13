@@ -25,19 +25,16 @@ Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH AL
 
 ## Example usage with scala REPL
 
-```scala
-    import com.fotolog.redis.{RedisCluster, RedisClient, RedisHost}
 
-    val shardingHashFun = (s:String)=>s.hashCode // shard on string values
-    val cluster = new RedisCluster[String](shardingHashFun, RedisHost("localhost", 6379) /*, more redis hosts */)
-    
-    val r = cluster("egusername") // get redis client
+```scala
+    import com.fotolog.redis.RedisClient
+
+    val r = RedisClient("localhost", 6379)
     
     // basic
     
     r.set("foo", "bar")
-    r.get("foo") // byte arrays by default
-    r.get[String]("foo") // typed, hints at implicit conversion
+    r.get[String]("foo") // get method has to be typed, hints at implicit conversion
     
     // lists
     r.lpush("ll", "l1")
@@ -50,23 +47,60 @@ Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH AL
     r.sadd("ss", "bar")
     r.smembers[String]("ss")
     
-    // async calls
+```
+ 
+For convenience any API method has both synchronous and asynchronous versions:
+    
+```scala
+
+    val fooFuture = r.getAsync[String]("foo")
+    
     val future = r.lpopAsync[String]("ll") // prefetch data
     future.map(_.toLong) // map to another value
     
-    // Do something else 
-    
-    import scala.concurrent.Await
-    import scala.concurrent.duration.Duration
-    import java.util.concurrent.TimeUnit
-    
-    val res = Await.result(future, Duration(1, TimeUnit.MINUTES)) // wait for result for 1 min.
+```
 
-    // dealing with Lua scripts:
+Synchronous methods by default wait up to 1 minute for the future to complete, but one can specify duration on client initialization:
+  
+```scala
+    import scala.concurrent.duration._
+
+    val r = RedisClient("localhost", timeout = 20 seconds) 
+
+```  
+
+Dealing with Lua scripts:
     
+```scala
+
     val resultsList = c.eval[Int]("return ARGV[1];", ("anyKey", "2"))
     val scriptHash = c.scriptLoad("return ARGV[1];")
     val evalResultsList = c.evalsha[Int](scriptHash, ("key", "4"))
+    
+```
+   
+Hyper Log Log:
+
+```scala
+
+    val anyAddedH1 = c.pfadd("h1", "a", "b", "c", "d") // true
+    val anyAddedH2 = c.pfadd("h2", "a", "b", "f", "g") // true
+    val count = c.pfcount("h1") // 4
+    
+    c.pfmerge("merge-result", "h1", "h2")
+    val mergeCount = c.pfcount("merge-result") // 6
+    
+```
+
+Sharding example:
+
+```scala
+    import com.fotolog.redis.{RedisCluster, RedisClient, RedisHost}
+
+    val shardingHashFunc = (s:String) => s.hashCode // shard on string values
+    val cluster = new RedisCluster[String](shardingHashFunc, RedisHost("localhost", 6379) /*, more redis hosts */)
+    
+    val r = cluster("egusername") // get redis client
 ```
 
 ## Example of adding custom conversion objects
@@ -110,6 +144,7 @@ Note: feature is in active development so only basic operations are supported no
 ## Redlock usage
 Redlock is a distributed lock implementation on multiple (or one) redis instances based on algorithm described  ([here](http://redis.io/topics/distlock)).
 Usage example:
+
 ```scala
     val redlock = Redlock("192.168.2.11" -> 6379, "192.168.2.12" -> 6379, "192.168.2.13" -> 6379)
     
