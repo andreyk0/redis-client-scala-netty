@@ -44,10 +44,18 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
   fakeServers.putIfAbsent(dbName, FakeServer())
   val server = fakeServers.get(dbName)
   val map = server.map
+  var inSubscribedMode = false
 
   override def send(cmd: Cmd): Future[Result] = {
     context.execute(cleaner)
-    Future { syncSend(cmd) }(context)
+    Future {
+      if(inSubscribedMode && !(cmd.isInstanceOf[Subscribe] || cmd.isInstanceOf[Unsubscribe])) {
+        throw new RedisException(ERR_SUBSCRIBE_MODE)
+      } else {
+        syncSend(cmd)
+      }
+
+    }(context)
   }
 
   private[this] def syncSend(cmd: Cmd): Result = cmd match {
@@ -168,6 +176,8 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
         int2res(server.countUnique(this))
       }
 
+      inSubscribedMode = true
+
       MultiBulkDataResult(subscriptions)
 
     case Publish(channel, data) =>
@@ -185,6 +195,20 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       }
 
       subscribers.length
+
+    case Unsubscribe(channels) =>
+      val unsubsriptions = channels.map { ptrn =>
+        server.pubSub = server.pubSub.filterNot {
+          case (client, pattern, subscription) =>
+            pattern == ptrn && client == this
+        }
+
+        int2res(server.countUnique(this))
+      }
+
+      if(server.countUnique(this) == 0) inSubscribedMode = false
+
+      MultiBulkDataResult(unsubsriptions)
 
     // scripting
 
@@ -211,6 +235,9 @@ class InMemoryRedisConnection(dbName: String) extends RedisConnection {
       ok
 
     case p: Ping => SingleLineResult("PONG")
+
+    case unsupported =>
+      throw new RedisException("ERR unsupported command " + unsupported)
 
   }
 
@@ -284,7 +311,7 @@ private[connections] object Data {
 
 private[connections] case class FakeServer(
   map: ConcurrentHashMap[String, Data] = new ConcurrentHashMap[String, Data](),
-  pubSub: ListBuffer[(RedisConnection, String, Subscribe)] = ListBuffer.empty
+  var pubSub: ListBuffer[(RedisConnection, String, Subscribe)] = ListBuffer.empty
 ) {
 
   def matchingSubscribers(channel: String) = pubSub.filter {
