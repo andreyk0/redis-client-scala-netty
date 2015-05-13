@@ -357,11 +357,11 @@ case class Hget(key: String, field: String) extends Cmd  {
 }
 
 case class Hmget(key: String, fields: Seq[String]) extends Cmd {
-  def asBin = Seq(HMGET :: key.getBytes(charset) :: fields.toList.map{_.getBytes(charset)}: _*)
+  def asBin = HMGET :: key.getBytes(charset) :: fields.toList.map{_.getBytes(charset)}
 }
 
 case class Hmset(key:String, kvs: Seq[(String, Array[Byte])]) extends Cmd {
-  def asBin = Seq(HMSET :: key.getBytes :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten: _*)
+  def asBin = HMSET :: key.getBytes :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
 }
 
 case class Hincrby(key: String, field: String, delta: Int) extends Cmd {
@@ -486,6 +486,20 @@ case class Subscribe(channels: Seq[String], handler: MultiBulkDataResult => Unit
 case class Unsubscribe(channels: Seq[String]) extends Cmd {
   def asBin =
     (if(channels.exists(s => s.contains("*") || s.contains("?"))) PUNSUBSCRIBE else UNSUBSCRIBE) :: channels.toList.map(_.getBytes(charset))
+}
+
+// hyper log log
+
+case class PfAdd(key: String, values: Seq[Array[Byte]]) extends Cmd {
+  def asBin = PFADD :: key.getBytes(charset) :: values.toList
+}
+
+case class PfCount(key: String) extends Cmd {
+  def asBin = Seq(PFCOUNT, key.getBytes(charset))
+}
+
+case class PfMerge(dst: String, keys: Seq[String]) extends Cmd {
+  def asBin = PFMERGE :: dst.getBytes(charset) :: keys.toList.map(_.getBytes(charset))
 }
 
 // utils

@@ -36,7 +36,8 @@ object RedisClient {
 
 class RedisClient(val r: RedisConnection, val timeout: Duration) extends GenericCommands with StringCommands
                                              with HashCommands with ListCommands
-                                             with SetCommands with ScriptingCommands with PubSubCommands {
+                                             with SetCommands with ScriptingCommands with PubSubCommands
+                                             with HyperLogLogCommands {
 
   def isConnected: Boolean = r.isOpen
   def shutdown() { r.shutdown() }
