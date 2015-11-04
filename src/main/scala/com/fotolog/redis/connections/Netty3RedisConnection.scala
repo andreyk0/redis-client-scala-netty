@@ -41,7 +41,7 @@ object Netty3RedisConnection {
     }
   }
 
-  new Thread(queueProcessor).start()
+  new Thread(queueProcessor, "Queue Processor").start()
 }
 
 class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnection {
@@ -50,7 +50,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
 
   private[Netty3RedisConnection] var isRunning = true
   private[Netty3RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
-  private[Netty3RedisConnection] val opQueue = new ArrayBlockingQueue[ResultFuture](128)
+  private[Netty3RedisConnection] val opQueue =  new ArrayBlockingQueue[ResultFuture](1028)
   private[Netty3RedisConnection] var clientState = new AtomicReference[ConnectionState](NormalConnectionState(opQueue))
 
   clientBootstrap.setPipelineFactory(new ChannelPipelineFactory() {

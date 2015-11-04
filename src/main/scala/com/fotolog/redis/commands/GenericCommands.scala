@@ -62,6 +62,11 @@ private[redis] trait GenericCommands extends ClientCommands {
     }
   }
 
+  def pingAsync: Future[Boolean] = r.send(Ping()).map {
+    case SingleLineResult("PONG") => true
+    case _ => false
+  }
+
   def info: Map[String,String] = await {
     r.send(Info()).map {
       case BulkDataResult(Some(data)) =>
