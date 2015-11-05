@@ -204,6 +204,14 @@ private[redis] object Cmd {
   val PFADD = "PFADD".getBytes
   val PFCOUNT = "PFCOUNT".getBytes
   val PFMERGE = "PFMERGE".getBytes
+
+  // Geo
+  val GEOADD = "GEOADD".getBytes
+  val GEODIST = "GEODIST".getBytes
+  val GEOHASH = "GEOHASH".getBytes
+  val GAORADIUS = "GAORADIUS".getBytes
+  val GEOPOS = "GEOPOS".getBytes
+  val GEORADIUSBYMEMBER = "GEORADIUSBYMEMBER".getBytes
 }
 
 import com.fotolog.redis.connections.Cmd._
@@ -506,3 +514,35 @@ case class PfMerge(dst: String, keys: Seq[String]) extends Cmd {
 case class Ping() extends Cmd { def asBin = Seq(PING) }
 case class Info() extends Cmd { def asBin = Seq(INFO) }
 case class FlushAll() extends Cmd { def asBin = Seq(FLUSHALL) }
+
+// geo
+
+case class GeoAdd2(key: String, values: Seq[(Array[Byte],Array[Byte])]) extends Cmd {
+  def asBin = GEOADD :: values.flatten.toList
+}
+
+case class GeoAdd3(key: String, values: Seq[(Array[Byte],Array[Byte],Array[Byte])]) extends Cmd {
+  def asBin = GEOADD :: values.flatten.toList
+}
+
+
+case class GeoDist(key: String, member1: String, member2: String, unit: String) extends Cmd {
+  def asBin = if ("m".equals(unit)) {
+    List(GEODIST, member1.getBytes(charset), member2.getBytes(charset))
+  } else {
+    List(GEODIST, member1.getBytes(charset), member2.getBytes(charset), unit.getBytes(charset))
+  }
+}
+
+case class GeoHash(key: String, members: Seq[String]) extends Cmd {
+  def asBin = GEOHASH :: key.getBytes(charset) :: members.map(_.getBytes(charset)).toList
+}
+
+case class GeoPos(key: String, members: Seq[String]) extends Cmd {
+  def asBin = GEOPOS :: key.getBytes(charset) :: members.map(_.getBytes(charset)).toList
+}
+
+case class GeoRadius extends Cmd { def asBin = GAORADIUS :: Nil }
+
+case class GeoRadiusByMember extends Cmd { def asBin = GEORADIUSBYMEMBER :: Nil }
+

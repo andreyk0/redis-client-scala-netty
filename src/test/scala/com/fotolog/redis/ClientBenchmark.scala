@@ -43,6 +43,7 @@ object ClientBenchmark extends Bench.LocalTime {
       } setUp { _ =>
         client = RedisClient()
       } tearDown { _ =>
+        client.shutdown()
         client = null
       } in { i =>
         val future = Future.traverse(1 to i) { i =>
@@ -62,6 +63,7 @@ object ClientBenchmark extends Bench.LocalTime {
         client.set("foo", "bar")
       } tearDown { _ =>
         client.del("foo")
+        client.shutdown()
         client = null
       } in { i =>
         val future = Future.traverse(1 to i) { i =>
@@ -80,6 +82,7 @@ object ClientBenchmark extends Bench.LocalTime {
         client = RedisClient()
       } tearDown { _ =>
         client.del("foo")
+        client.shutdown()
         client = null
       } in { i =>
         val future = Future.traverse(1 to i) { i =>
