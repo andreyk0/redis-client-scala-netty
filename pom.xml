@@ -50,6 +50,7 @@
             <groupId>com.storm-enroute</groupId>
             <artifactId>scalameter_2.11</artifactId>
             <version>0.7</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
