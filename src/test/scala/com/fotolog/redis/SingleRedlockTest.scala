@@ -6,13 +6,13 @@ import org.junit.{Test, After, Before}
 
 class SingleRedlockTest {
 
-  val c = RedisClient()
+  val c = RedisClient(sys.env("TEST_DB_HOST"))
   val l = Redlock(c)
 
   @Before def setUp() { c.flushall }
 
   @Test def testDistlock(): Unit = {
-    
+
     val key = "redlock:key"
     val ttl = 60*60
     val tries = 5

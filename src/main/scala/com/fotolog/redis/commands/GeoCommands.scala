@@ -4,6 +4,7 @@ import com.fotolog.redis.{GeoUnit, BinaryConverter, RedisClient}
 import com.fotolog.redis.connections._
 
 import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
  * http://redis.io/commands#geo
