@@ -1,0 +1,12 @@
+language: scala
+scala:
+  - 2.11.5
+script:
+  - mvn test package
+deploy:
+  provider: bintray
+  file: description.json
+  user: sergkh
+  key:
+    secure: gp0FVcqYsiUZ3/Gv4kbvdFGBXZ7S4c8pznTpWmyIQGU9PloqadJyQAQ0lyLKJfM+PEENw2+y97mW4I79xfHE2zq8I9Csts8xkEpEX2SI7W3YPgU3qgjbblhMtCvxLLLLnBLAI4edZr+QTOZTejPpH0bn9hp9oRwuMzdrMIk5TZE=
+  dry-run: true
