@@ -272,11 +272,11 @@ case class SetCmd(key: String,
 }
 
 case class MSet(kvs: Seq[(String, Array[Byte])]) extends Cmd {
-  def asBin = MSET :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
+  def asBin = MSET :: kvs.toList.flatMap { kv => List(kv._1.getBytes(charset), kv._2) }
 }
 
 case class SetNx(kvs: Seq[(String, Array[Byte])]) extends Cmd {
-  def asBin = MSETNX :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
+  def asBin = MSETNX :: kvs.toList.flatMap { kv => List(kv._1.getBytes(charset), kv._2) }
 }
 
 case class GetSet(key: String, v: Array[Byte]) extends Cmd {
@@ -375,7 +375,7 @@ case class Hmget(key: String, fields: Seq[String]) extends Cmd {
 }
 
 case class Hmset(key:String, kvs: Seq[(String, Array[Byte])]) extends Cmd {
-  def asBin = HMSET :: key.getBytes :: kvs.toList.map{kv => List(kv._1.getBytes(charset), kv._2)}.flatten
+  def asBin = HMSET :: key.getBytes :: kvs.toList.flatMap { kv => List(kv._1.getBytes(charset), kv._2) }
 }
 
 case class Hincrby(key: String, field: String, delta: Int) extends Cmd {
@@ -464,11 +464,11 @@ case class Srandmember(key: String) extends Cmd {
 
 // scripting
 case class Eval(script: String, kv: Seq[(String, Array[Byte])]) extends Cmd {
-  def asBin = EVAL :: script.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.map { kv => List(kv._1.getBytes(charset), kv._2)}.flatten
+  def asBin = EVAL :: script.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.flatMap { kv => List(kv._1.getBytes(charset), kv._2) }
 }
 
 case class EvalSha(digest: String, kv: Seq[(String, Array[Byte])]) extends Cmd {
-  def asBin = EVALSHA :: digest.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.map{ kv => List(kv._1.getBytes(charset), kv._2)}.flatten
+  def asBin = EVALSHA :: digest.getBytes(charset) :: kv.length.toString.getBytes :: kv.toList.flatMap { kv => List(kv._1.getBytes(charset), kv._2) }
 }
 
 case class ScriptLoad(script: String) extends Cmd { def asBin = SCRIPT_LOAD :+ script.getBytes(charset) }
