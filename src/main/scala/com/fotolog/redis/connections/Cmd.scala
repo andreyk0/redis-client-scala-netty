@@ -219,6 +219,12 @@ sealed abstract class Cmd {
   def asBin: Seq[Array[Byte]]
 }
 
+sealed trait ArrayFlatten {
+  implicit val flattener2 = (t: (Array[Byte], Array[Byte])) ⇒ t._1.toList ::: t._2.toList
+
+  implicit val flattener3 = (t: (Array[Byte], Array[Byte], Array[Byte])) ⇒ t._1.toList ::: t._2.toList ::: t._3.toList
+}
+
 case class Exists(key: String) extends Cmd {
   def asBin = Seq(EXISTS, key.getBytes(charset))
 }
@@ -517,12 +523,12 @@ case class FlushAll() extends Cmd { def asBin = Seq(FLUSHALL) }
 
 // geo
 
-case class GeoAdd2(key: String, values: Seq[(Array[Byte],Array[Byte])]) extends Cmd {
-  def asBin = GEOADD :: values.flatten.toList
+case class GeoAdd2(key: String, values: Seq[(Array[Byte],Array[Byte])]) extends Cmd with ArrayFlatten {
+  def asBin = Seq(GEOADD, values.flatten.toArray)
 }
 
-case class GeoAdd3(key: String, values: Seq[(Array[Byte],Array[Byte],Array[Byte])]) extends Cmd {
-  def asBin = GEOADD :: values.flatten.toList
+case class GeoAdd3(key: String, values: Seq[(Array[Byte],Array[Byte],Array[Byte])]) extends Cmd with ArrayFlatten {
+  def asBin = Seq(GEOADD, values.flatten.toArray)
 }
 
 
