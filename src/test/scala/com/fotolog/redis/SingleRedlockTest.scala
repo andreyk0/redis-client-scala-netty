@@ -6,7 +6,7 @@ import org.junit.{Test, After, Before}
 
 class SingleRedlockTest {
 
-  val c = RedisClient(sys.env("TEST_DB_HOST"))
+  val c = RedisClient(sys.env.getOrElse("TEST_DB_HOST", "localhost"))
   val l = Redlock(c)
 
   @Before def setUp() { c.flushall }

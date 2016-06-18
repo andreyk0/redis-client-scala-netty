@@ -9,7 +9,7 @@ import org.junit.{Test, After, Before}
  *         Created on 5/13/15.
  */
 class HyperLogLogTest {
-  val c = RedisClient("localhost", 6379)
+  val c = RedisClient(sys.env.getOrElse("TEST_DB_HOST", "localhost"))
 
   @Before def setUp() { c.flushall }
   @After def tearDown() { c.flushall }

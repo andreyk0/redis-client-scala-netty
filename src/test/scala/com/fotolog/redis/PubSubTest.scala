@@ -14,7 +14,7 @@ class PubSubTest {
   var c: RedisClient = _
 
   @Before def setUp() {
-    c = RedisClient(sys.env("TEST_DB_HOST"))
+    c = RedisClient(sys.env.getOrElse("TEST_DB_HOST", "localhost"))
     c.flushall
   }
 
