@@ -76,7 +76,8 @@ private[redis] trait GenericCommands extends ClientCommands {
     }
   }
 
-
+  def auth(password: String): Boolean = await(authAsync(password))
+  def authAsync(password: String): Future[Boolean] = r.send(Auth(password)).map(okResultAsBoolean)
   def discardAsync() = r.send(Discard())
   def multiAsync() = r.send(Multi()).map(okResultAsBoolean)
   def execAsync() = r.send(Exec()).map(multiBulkDataResultToSet(BinaryConverter.StringConverter))

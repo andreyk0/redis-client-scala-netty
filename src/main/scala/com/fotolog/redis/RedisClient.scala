@@ -2,6 +2,7 @@ package com.fotolog.redis
 
 import java.util.concurrent.TimeUnit
 
+import com.fotolog.redis
 import com.fotolog.redis.commands._
 import com.fotolog.redis.connections.{InMemoryRedisConnection, Netty3RedisConnection, RedisConnection}
 
@@ -16,8 +17,12 @@ object RedisClient {
     def get() = Await.result[T](f, DEFAULT_TIMEOUT)
   }
 
-  def apply(host: String = "localhost", port: Int = 6379, timeout: Duration = DEFAULT_TIMEOUT) =
-    if(host.startsWith("mem:")) {
+  @throws(classOf[AuthenticationException])
+  def apply(host: String = "localhost",
+            port: Int = 6379,
+            password: Option[String] = None,
+            timeout: Duration = DEFAULT_TIMEOUT) = {
+    val client = if (host.startsWith("mem:")) {
       new RedisClient(new InMemoryRedisConnection(host.substring("mem:".length)), timeout)
     } else {
       // in case host specified as "host:port" then override port
@@ -30,6 +35,15 @@ object RedisClient {
 
       new RedisClient(new Netty3RedisConnection(aHost, aPort), timeout)
     }
+
+    for (pass <- password) {
+      if (!client.auth(pass)) {
+        throw new AuthenticationException("Authentication failed")
+      }
+    }
+
+    client
+  }
 
 }
 

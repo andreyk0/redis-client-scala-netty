@@ -100,7 +100,7 @@ private[redis] object Cmd {
   val SORT = "SORT".getBytes
   val TTL = "TTL".getBytes
   val TYPE = "TYPE".getBytes
-
+  val AUTH = "AUTH".getBytes
 
   // list
   val BLPOP = "BLPOP".getBytes
@@ -178,7 +178,6 @@ private[redis] object Cmd {
   val ZSCAN = "ZSCAN".getBytes
 
   // connection
-  val AUTH = "AUTH".getBytes
   val ECHO = "ECHO".getBytes
   val PING = "PING".getBytes
   val QUIT = "QUIT".getBytes
@@ -520,6 +519,7 @@ case class PfMerge(dst: String, keys: Seq[String]) extends Cmd {
 case class Ping() extends Cmd { def asBin = Seq(PING) }
 case class Info() extends Cmd { def asBin = Seq(INFO) }
 case class FlushAll() extends Cmd { def asBin = Seq(FLUSHALL) }
+case class Auth(password: String) extends Cmd { def asBin = Seq(AUTH, password.getBytes(charset)) }
 
 // geo
 

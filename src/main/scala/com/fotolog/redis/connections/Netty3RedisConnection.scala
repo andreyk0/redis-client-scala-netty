@@ -77,7 +77,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
     }
   }
 
-  forceChannelOpen()
+  // forceChannelOpen()
 
   def send(cmd: Cmd): Future[Result] = {
     val f = ResultFuture(cmd)

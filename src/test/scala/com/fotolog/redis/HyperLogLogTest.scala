@@ -8,12 +8,11 @@ import org.junit.{Test, After, Before}
  * @author Sergey Khruschak <sergey.khruschak@gmail.com>
  *         Created on 5/13/15.
  */
-class HyperLogLogTest {
-  val c = RedisClient(sys.env.getOrElse("TEST_DB_HOST", "localhost"))
+class HyperLogLogTest extends TestClient {
+  val c = createClient
 
   @Before def setUp() { c.flushall }
   @After def tearDown() { c.flushall }
-
 
   @Test def testPfAddAndCount() {
     assertEquals(0, c.pfcount("hll"))

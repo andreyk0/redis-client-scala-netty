@@ -4,9 +4,9 @@ import com.fotolog.redis.primitives.{SuccessfulLock, Redlock}
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
-class SingleRedlockTest {
+class SingleRedlockTest extends TestClient {
 
-  val c = RedisClient(sys.env.getOrElse("TEST_DB_HOST", "localhost"))
+  val c = createClient
   val l = Redlock(c)
 
   @Before def setUp() { c.flushall }
