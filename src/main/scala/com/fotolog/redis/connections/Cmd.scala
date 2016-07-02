@@ -520,6 +520,7 @@ case class Ping() extends Cmd { def asBin = Seq(PING) }
 case class Info() extends Cmd { def asBin = Seq(INFO) }
 case class FlushAll() extends Cmd { def asBin = Seq(FLUSHALL) }
 case class Auth(password: String) extends Cmd { def asBin = Seq(AUTH, password.getBytes(charset)) }
+case class Select(db: Int) extends Cmd { def asBin = Seq(SELECT, db.toString.getBytes(charset)) }
 
 // geo
 
