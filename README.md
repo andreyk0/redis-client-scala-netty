@@ -1,4 +1,4 @@
-## [Redis](http://redis.io) scala client library
+## [Redis](http://redis.io) scala client library [![Build Status](https://travis-ci.org/sergkh/redis-client-scala-netty.svg?branch=master)](https://travis-ci.org/sergkh/redis-client-scala-netty)
 
 ## Features
 
