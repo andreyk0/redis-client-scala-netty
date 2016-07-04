@@ -3,7 +3,7 @@ package com.fotolog.redis
 import org.junit.Assert._
 import org.junit._
 
-class RedisClientTest extends TestClient{
+class RedisClientTest extends TestClient {
   val c = createClient
 
   @Before def setUp() { c.flushall }

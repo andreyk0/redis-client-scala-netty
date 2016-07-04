@@ -76,7 +76,7 @@ class PubSubTest extends TestClient {
     c.setNx("someData", "data")
   }
 
-  /* TODO: @Test def testSubscribeUnsubscribe() {
+  @Test def testSubscribeUnsubscribe() {
     val subscriptionRes = c.subscribe[String]("baz", "bar", "gee") { (channel, msg) =>
       println("Subscriber1: Got data from channel " + channel + ":" + msg)
     }
@@ -92,7 +92,7 @@ class PubSubTest extends TestClient {
     // we unsubscribed from all channels so now have to be able to send any command
     assertTrue(c.set("key", "test"))
     assertEquals("test", c.get[String]("key").get)
-  } */
+  }
 
 
   private def publishMsg(channel: String, msg: String) {
