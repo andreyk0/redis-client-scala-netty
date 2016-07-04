@@ -3,7 +3,7 @@ package com.fotolog.redis.connections
 import java.net.InetSocketAddress
 import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicReference
-import java.util.concurrent.{BlockingQueue, ArrayBlockingQueue, Executors, TimeUnit}
+import java.util.concurrent._
 
 import com.fotolog.redis._
 import org.jboss.netty.bootstrap.ClientBootstrap
@@ -67,14 +67,32 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   clientBootstrap.setOption("keepAlive", true)
   clientBootstrap.setOption("connectTimeoutMillis", 1000)
 
+  private [Netty3RedisConnection] val channelReady = new CountDownLatch(1)
+
   private[Netty3RedisConnection] val channel = {
     val future = clientBootstrap.connect(new InetSocketAddress(host, port))
-    future.await(1, TimeUnit.MINUTES)
-    if (future.isSuccess) {
-      future.getChannel
-    } else {
-      throw future.getCause
+    var channelInternal: Channel = null
+
+    future.addListener(new ChannelFutureListener() {
+      override def operationComplete(channelFuture: ChannelFuture) = {
+        if (future.isSuccess) {
+          channelInternal = future.getChannel
+          channelReady.countDown()
+        } else {
+          clientBootstrap.releaseExternalResources()
+          throw future.getCause
+        }
+      }
+    })
+
+    try {
+      channelReady.await(1, TimeUnit.MINUTES)
+    } catch {
+      case iex: InterruptedException =>
+        throw new RedisException("Interrupted while waiting for connection")
     }
+
+    channelInternal
   }
 
   // forceChannelOpen()
