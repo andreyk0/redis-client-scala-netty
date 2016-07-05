@@ -2,11 +2,11 @@ package com.fotolog.redis
 
 import java.util.concurrent.atomic.AtomicReference
 
-case class RedisHost(host: String, port: Int)
+case class RedisHost(host: String = "localhost", port: Int = 6379)
 
 class RedisCluster[Shard](hash: (Shard)=>Int, hosts: RedisHost*) {
-    val h2cRef = new AtomicReference[Map[RedisHost,RedisClient]](Map.empty)
-    
+    val h2cRef = new AtomicReference[Map[RedisHost, RedisClient]](Map.empty)
+
     def apply(s: Shard): RedisClient = {
         val h = hosts(hash(s).abs % hosts.length)
         h2cRef.get.get(h) match {
@@ -24,7 +24,7 @@ class RedisCluster[Shard](hash: (Shard)=>Int, hosts: RedisHost*) {
         }
         h2c.get(h) match {
             case None => newClientThreadSafe()
-            case Some(c) => if (c.isConnected){ c } else { c.shutdown; newClientThreadSafe() }
+            case Some(c) => if (c.isConnected){ c } else { c.shutdown(); newClientThreadSafe() }
         }
     }
 }
