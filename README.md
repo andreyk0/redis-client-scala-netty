@@ -16,12 +16,10 @@ Changes from [original version](https://github.com/andreyk0/redis-client-scala-n
 * in-memory client
 * Distributed lock implementation ([Redlock](http://redis.io/topics/distlock))
 
-## Building by [maven](http://maven.apache.org/):
-    $ mvn package
+## Building
+    $ sbt package
 
-Unit tests assume redis is running on localhost on port 6380, THEY WILL FLUSH ALL DATA!
-
-    $ mvn package -DskipTests=true
+Unit tests assume redis is running on localhost on port 6379, THEY WILL FLUSH ALL DATA!
 
 ## Example usage with scala REPL
 

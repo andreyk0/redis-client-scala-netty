@@ -5,7 +5,9 @@ scala:
 services:
   - redis-server
 script:
-  - mvn test package
+  - sbt clean coverage test package
+after_success:
+    - sbt coveralls
 deploy:
   provider: bintray
   file: description.json
