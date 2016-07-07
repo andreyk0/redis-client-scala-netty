@@ -2,7 +2,9 @@ name := "redis-scala"
 
 organization := "com.impactua"
 
-version := "1.2.10"
+val revision = sys.env.getOrElse("TRAVIS_BUILD_NUMBER", "0-SNAPSHOT")
+
+version := s"""1.3.$revision"""
 
 scalaVersion := "2.11.5"
 
