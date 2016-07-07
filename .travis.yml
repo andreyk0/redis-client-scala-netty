@@ -1,15 +1,21 @@
 language: scala
 scala:
-  - 2.11.5
-  - 2.11.8
+- 2.11.5
+- 2.11.8
 services:
-  - redis-server
+- redis-server
 script:
-  - mvn test package
+- sbt clean coverage test package
+after_success:
+- sbt coveralls
+- test "${TRAVIS_PULL_REQUEST}" = 'false' && sh "$TRAVIS_BUILD_DIR/.bintray.sh" && sbt publish
 deploy:
   provider: bintray
   file: description.json
   user: sergkh
   key:
     secure: gp0FVcqYsiUZ3/Gv4kbvdFGBXZ7S4c8pznTpWmyIQGU9PloqadJyQAQ0lyLKJfM+PEENw2+y97mW4I79xfHE2zq8I9Csts8xkEpEX2SI7W3YPgU3qgjbblhMtCvxLLLLnBLAI4edZr+QTOZTejPpH0bn9hp9oRwuMzdrMIk5TZE=
-  dry-run: true
+env:
+  global:
+  - secure: D5e1W2+2vqny4JpF2wP2t1NYi6CrhtHStao8FKrOpHWBu8GwcRuIb5YcXw0Fp7l+IDHLlME/NOWNdYr/OgMjV5OWd4D8HSvmRb1oUZZayolIgjatY0tm0Ysg3v8i0fDc8jxDesrA5MpaIlPmqJte7uUoGv+TtGCX3mwx6w7LPOo=
+  - secure: aY634KqigUiwZhH6NpkOmSvoyC35A/Fe6XjDpgWE32CwixgNDNt0n/dSI7amP0jrhzivZSeNUBU2LyuNHmpYRrSzFWtMm5+cSG7Bda1minfmvyVU66hEcUD6TWfXJH9kbbYHuOdWfsNchqQxWGVdudWglyOdyQdkUdQ/+Rptzw0=
