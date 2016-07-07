@@ -15,7 +15,6 @@ deploy:
   user: sergkh
   key:
     secure: gp0FVcqYsiUZ3/Gv4kbvdFGBXZ7S4c8pznTpWmyIQGU9PloqadJyQAQ0lyLKJfM+PEENw2+y97mW4I79xfHE2zq8I9Csts8xkEpEX2SI7W3YPgU3qgjbblhMtCvxLLLLnBLAI4edZr+QTOZTejPpH0bn9hp9oRwuMzdrMIk5TZE=
-  dry-run: true
 env:
   global:
   - secure: D5e1W2+2vqny4JpF2wP2t1NYi6CrhtHStao8FKrOpHWBu8GwcRuIb5YcXw0Fp7l+IDHLlME/NOWNdYr/OgMjV5OWd4D8HSvmRb1oUZZayolIgjatY0tm0Ysg3v8i0fDc8jxDesrA5MpaIlPmqJte7uUoGv+TtGCX3mwx6w7LPOo=
