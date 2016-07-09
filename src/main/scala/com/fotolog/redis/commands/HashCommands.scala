@@ -72,4 +72,18 @@ private[redis] trait HashCommands extends ClientCommands {
 
   def hgetall[T](key: String)(implicit conv: BinaryConverter[T]): Map[String,T] = await { hgetallAsync(key)(conv) }
 
+  def hstrlen[T](key: String, field: String): Int = await { hstrlenAsync(key, field)}
+
+  def hstrlenAsync[T](key: String, field: String): Future[Int] = r.send(Hstrlen(key, field)).map(integerResultAsInt)
+
+  def hsetnxAsync[T](key: String, field: String, value: T)(implicit conv: BinaryConverter[T]): Future[Int] =
+    r.send(Hsetnx(key, field, conv.write(value))).map(integerResultAsInt)
+
+  def hsetnx[T](key: String, field: String, value: T)(implicit conv: BinaryConverter[T]): Int = await { hsetnxAsync(key, field, value) }
+
+  def hincrbyfloatAsync[T](key: String, field: String, delta: Double)(implicit conv: BinaryConverter[T]): Future[Double] =
+    r.send(Hincrbyfloat(key, field, delta)).map(doubleResultAsDouble)
+
+  def hincrbyfloat[T](key: String, field: String, delta: Double)(implicit conv: BinaryConverter[T]): Double = await { hincrbyfloatAsync(key, field, delta)}
+
 }

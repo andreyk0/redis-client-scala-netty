@@ -45,6 +45,7 @@ private[redis] object Cmd {
   val HSETNX = "HSETNX".getBytes
   val HVALS = "HVALS".getBytes
   val HSCAN = "HSCAN".getBytes
+  val HSTRLEN = "HSTRLEN".getBytes
 
   // string
   val APPEND = "APPEND".getBytes
@@ -403,6 +404,18 @@ case class Hvals(key: String) extends Cmd {
 
 case class Hgetall(key: String) extends Cmd {
   def asBin = Seq(HGETALL, key.getBytes(charset))
+}
+
+case class Hstrlen(key: String, field: String) extends Cmd {
+  def asBin = Seq(HSTRLEN, key.getBytes, field.getBytes)
+}
+
+case class Hsetnx(key: String, field: String, value: Array[Byte], nx: Boolean = false) extends Cmd {
+  def asBin = Seq(if (nx) HSET else HSETNX, key.getBytes(charset), field.getBytes(charset), value)
+}
+
+case class Hincrbyfloat(key: String, field: String, delta: Double) extends Cmd {
+  def asBin = Seq(HINCRBYFLOAT, key.getBytes(charset), field.getBytes(charset), delta.toString.getBytes)
 }
 
 // sets
