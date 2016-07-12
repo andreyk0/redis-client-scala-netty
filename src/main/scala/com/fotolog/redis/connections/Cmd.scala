@@ -2,8 +2,6 @@ package com.fotolog.redis.connections
 
 import java.nio.charset.Charset
 
-import com.fotolog.redis.GeoUnit
-
 private[redis] object Cmd {
 
   val charset = Charset.forName("UTF-8")
@@ -563,11 +561,6 @@ case class GeoHash(key: String, members: Seq[String]) extends Cmd {
 case class GeoPos(key: String, members: Seq[String]) extends Cmd {
   def asBin = GEOPOS :: key.getBytes(charset) :: members.map(_.getBytes(charset)).toList
 }
-
-case class GeoRadius(key: String, geoInfo: Seq[Int], unit: String) extends Cmd {
-  def asBin = GAORADIUS :: key.getBytes(charset) :: geoInfo.map(_.toString.getBytes(charset)).toList
-}
-
 // TODO: case class GeoRadius extends Cmd { def asBin = GAORADIUS :: Nil }
 
 // TODO: case class GeoRadiusByMember extends Cmd { def asBin = GEORADIUSBYMEMBER :: Nil }
