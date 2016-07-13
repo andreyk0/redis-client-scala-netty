@@ -9,7 +9,7 @@ import org.junit.{After, Before, Test}
  * Will be merged with RedisClientTest when in-memory client will support
  * full set of operations.
  */
-class InMemoryClientTest {
+class InMemoryClientSpec {
   val c = RedisClient("mem:test")
 
   @Before def setUp() { c.flushall }

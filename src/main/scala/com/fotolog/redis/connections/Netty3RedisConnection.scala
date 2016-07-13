@@ -80,6 +80,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
           channelReady.countDown()
         } else {
           clientBootstrap.releaseExternalResources()
+          channelReady.countDown()
           throw future.getCause
         }
       }
@@ -94,8 +95,6 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
 
     channelInternal
   }
-
-  // forceChannelOpen()
 
   def send(cmd: Cmd): Future[Result] = {
     val f = ResultFuture(cmd)
@@ -112,13 +111,21 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
 
   def shutdown() {
     isRunning = false
-    channel.close().await(1, TimeUnit.MINUTES)
-  }
+    val channelClosed = new CountDownLatch(1)
 
-  private def forceChannelOpen() {
-    val f = new ResultFuture(Ping())
-    enqueue(f)
-    Await.result(f.future, Duration(1, TimeUnit.MINUTES))
+    channel.close().addListener(new ChannelFutureListener() {
+      override def operationComplete(channelFuture: ChannelFuture) = {
+        channelClosed.countDown()
+      }
+    })
+
+    try {
+      channelClosed.await(1, TimeUnit.MINUTES)
+    } catch {
+      case iex: InterruptedException =>
+        throw new RedisException("Interrupted while waiting for connection close")
+    }
+
   }
 }
 
