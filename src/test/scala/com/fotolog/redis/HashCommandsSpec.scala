@@ -4,11 +4,7 @@ package com.fotolog.redis
   * Created by faiaz on 12.07.16.
   */
 import org.scalatest.{FlatSpec, Matchers}
-import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 
-
-@RunWith(classOf[JUnitRunner])
 class HashCommandsSpec extends FlatSpec with Matchers with TestClient {
   val c = createClient
   c.flushall
