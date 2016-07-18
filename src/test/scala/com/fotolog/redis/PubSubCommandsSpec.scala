@@ -13,7 +13,7 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
   publisher1.flushall
   subscriber.flushall
 
-  "A publish/unsubscribe" should "return Int result" in {
+  "A publish" should "return Int result" in {
     publisher.publish[String]("test" , "Hello") shouldEqual 0
     subscriber.subscribe[String]("test"){(channel, msg) => None }
     publisher.publish[String]("test" , "Hi subscriber") shouldEqual 1
@@ -40,11 +40,6 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
     publisher1.publish[String]("test1", "1pub msg")
     channelRes shouldEqual "test1"
     msgRes shouldEqual "1pub msg"
-
-    /*subscriber.unsubscribe/*Async*/()
-    publisher1.publish[String]("test1", "MicroWorld") shouldEqual 0
-    channelRes shouldEqual "test1"
-    msgRes shouldEqual "1pub msg"*/
   }
 
 }
