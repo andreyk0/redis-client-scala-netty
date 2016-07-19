@@ -2,8 +2,10 @@ language: scala
 scala:
 - 2.11.5
 - 2.11.8
-services:
-- redis-server
+addons:
+  apt:
+    packages:
+      - redis-server
 script:
 - sbt clean coverage test package
 after_success:

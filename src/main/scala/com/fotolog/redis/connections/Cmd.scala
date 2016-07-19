@@ -561,7 +561,6 @@ case class GeoHash(key: String, members: Seq[String]) extends Cmd {
 case class GeoPos(key: String, members: Seq[String]) extends Cmd {
   def asBin = GEOPOS :: key.getBytes(charset) :: members.map(_.getBytes(charset)).toList
 }
-
 // TODO: case class GeoRadius extends Cmd { def asBin = GAORADIUS :: Nil }
 
 // TODO: case class GeoRadiusByMember extends Cmd { def asBin = GEORADIUSBYMEMBER :: Nil }
