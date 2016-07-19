@@ -1,11 +1,13 @@
 package com.fotolog.redis
 
-import org.junit.Assert._
-import org.junit._
+import org.scalatest.{FlatSpec, Matchers}
 
-class RedisClientTest extends TestClient {
-  val c = createClient
+class RedisClientSpec extends FlatSpec with Matchers with TestClient {
 
+  import org.scalatest.{FlatSpec, Matchers}
+
+  val c = client
+/*
   @Before def setUp() { c.flushall }
   @After def tearDown() { c.flushall }
 
@@ -237,6 +239,9 @@ class RedisClientTest extends TestClient {
     }
   }
 
+*/
   private def testIntVals = 0 :: {for(i<-0 to 30) yield List(1<<i,-(1<<i))}.toList.flatten
   private def testLongVals = 0l :: {for(i<-0 to 62) yield List(1l<<i,-(1l<<i))}.toList.flatten
+
+
 }

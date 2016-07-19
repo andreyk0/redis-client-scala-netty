@@ -1,18 +1,15 @@
 package com.fotolog.redis
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
-
-import org.junit.Assert._
-import org.junit.{After, AfterClass, Before, Test}
+import org.scalatest.{FlatSpec, Matchers}
 
 /**
  * Tests for publish/subscribe mechanism.
  *
  * @author Sergey Khruschak on 4/9/15.
  */
-class PubSubTest extends TestClient {
+class PubSubSpec extends FlatSpec with Matchers with TestClient {
   var c: RedisClient = _
-
+/*
   @Before def setUp() {
     c = createClient
     c.flushall
@@ -99,5 +96,5 @@ class PubSubTest extends TestClient {
     assertEquals(1, createClient.publish(channel, msg))
   }
 
-
+*/
 }

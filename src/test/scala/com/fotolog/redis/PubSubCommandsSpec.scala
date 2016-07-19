@@ -9,6 +9,7 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
 
   val publisher, publisher1 = createClient
   val subscriber = createClient
+
   publisher.flushall
   publisher1.flushall
   subscriber.flushall
@@ -41,5 +42,6 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
     channelRes shouldEqual "test1"
     msgRes shouldEqual "1pub msg"
   }
+
 
 }

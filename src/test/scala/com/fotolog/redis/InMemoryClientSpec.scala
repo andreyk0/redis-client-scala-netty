@@ -1,75 +1,76 @@
 package com.fotolog.redis
 
-import java.util.concurrent.{TimeUnit, CountDownLatch}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.scalatest.{FlatSpec, Matchers}
 
 /**
  * Will be merged with RedisClientTest when in-memory client will support
  * full set of operations.
  */
-class InMemoryClientSpec {
+class InMemoryClientSpec extends FlatSpec with Matchers {
   val c = RedisClient("mem:test")
 
-  @Before def setUp() { c.flushall }
-  @After def tearDown() { c.flushall }
-
-  @Test def testConnectionCommands() {
-    assertTrue(c.ping())
+  "A In Memory Client" should "respond to ping" in {
+    c.ping() shouldBe true
   }
 
-  @Test def testGetSetExistsType() {
-    assertFalse(c.exists("foo"))
-    assertTrue(c.set("foo", "bar", 2592000))
+  it should "support get, set, exists and type operations" in {
+    c.exists("foo") shouldBe false
+    c.set("foo", "bar", 2592000) shouldBe true
 
-    assertTrue(c.exists("foo"))
+    c.exists("foo") shouldBe true
 
-    assertEquals("bar", c.get[String]("foo").get)
-    assertEquals(KeyType.String, c.keytype("foo"))
+    c.get[String]("foo").get shouldEqual "bar"
+    c.keytype("foo") shouldEqual KeyType.String
 
     // keys test
-    assertTrue(c.set("boo", "baz"))
-    assertTrue(c.set("baz", "bar"))
-    assertTrue(c.set("buzzword", "bar"))
+    c.set("boo", "baz") shouldBe true
+    c.set("baz", "bar") shouldBe true
+    c.set("buzzword", "bar") shouldBe true
 
-    assertEquals(Set("foo", "boo"), c.keys("?oo"))
-    assertEquals(Set("foo", "boo", "baz", "buzzword"), c.keys("*"))
-    assertEquals(Set("foo", "boo", "baz"), c.keys("???"))
-    assertEquals(Set("baz", "buzzword", "boo"), c.keys("*b*"))
+    c.keys("?oo") shouldEqual Set("foo", "boo")
+    c.keys("*") shouldEqual Set("foo", "boo", "baz", "buzzword")
+    c.keys("???") shouldEqual Set("foo", "boo", "baz")
+    c.keys("*b*") shouldEqual Set("baz", "buzzword", "boo")
 
-    assertEquals("One key has to be deleted", 1, c.del("foo"))
-    assertFalse("Key should not exist", c.exists("foo"))
+    c.del("foo") shouldEqual 1
+    c.exists("foo") shouldBe false
 
-    assertEquals("No keys has to be deleted", 0, c.del("foo"))
+    c.del("foo") shouldEqual 0
 
     // rename
-    assertTrue("Rename should succeed", c.rename("baz", "rbaz"))
-    assertFalse(c.exists("baz"))
-    assertEquals(Some("bar"), c.get[String]("rbaz"))
+    c.rename("baz", "rbaz") shouldBe true
+    c.exists("baz") shouldBe false
+    c.get[String]("rbaz") shouldEqual Some("bar")
 
     // rename nx
-    assertFalse("Rename to existent key should do nothing", c.rename("rbaz", "buzzword", true))
+    c.rename("rbaz", "buzzword", true) shouldBe false
   }
 
-  @Test def testStringCommands(): Unit = {
-    assertTrue(c.set("foo", 1))
-    assertEquals(11, c.incr("foo", 10))
-    assertEquals(0, c.incr("foo", -11))
-    assertEquals(-5, c.incr("unexistent", -5))
+  it should "support inc/dec operations" in {
+    c.set("foo", 1) shouldBe true
+    c.incr("foo", 10) shouldEqual 11
+    c.incr("foo", -11) shouldEqual 0
+    c.incr("unexistent", -5) shouldEqual -5
   }
 
-  @Test(expected = classOf[RedisException])
-  def testRenameFailure() {
-    c.rename("non-existent", "newkey")
+  it should "fail to rename inexistent key" in {
+    intercept[RedisException] {
+      c.rename("non-existent", "newkey")
+    }
   }
 
-  @Test(expected = classOf[RedisException])
-  def testIncrementFailure() {
-    assertTrue(c.set("baz", "bar"))
-    c.incr("baz")
+  it should "fail to increment inexistent key" in {
+    c.set("baz", "bar") shouldBe true
+
+    intercept[RedisException] {
+      c.incr("baz")
+    }
+
   }
 
+  /*
   @Test def testKeyTtl() {
     assertTrue(c.set("foo", "bar", 5))
     assertTrue(c.ttl("foo") <= 5)
@@ -149,4 +150,5 @@ class InMemoryClientSpec {
     assertTrue(invoked)
 
   }
+  */
 }
