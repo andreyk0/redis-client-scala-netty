@@ -25,6 +25,5 @@ bintrayOrganization in bintray := Some("sergkh")
 libraryDependencies ++= Seq(
   "io.netty" % "netty" % "3.10.6.Final",
   "org.scalatest" %% "scalatest" % "2.2.6" % "test",
-  "junit" % "junit" % "4.12" % "test",
   "com.storm-enroute" %% "scalameter" % "0.7" % "test"
 )
