@@ -2,7 +2,7 @@ package com.fotolog.redis.connections
 
 import java.net.InetSocketAddress
 import java.nio.charset.Charset
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent._
 
 import com.fotolog.redis._
@@ -48,7 +48,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
 
   import com.fotolog.redis.connections.Netty3RedisConnection._
 
-  private[Netty3RedisConnection] var isRunning = true
+  private[Netty3RedisConnection] val isRunning = new AtomicBoolean(true)
   private[Netty3RedisConnection] val clientBootstrap = new ClientBootstrap(channelFactory)
   private[Netty3RedisConnection] val opQueue =  new ArrayBlockingQueue[ResultFuture](1028)
   private[Netty3RedisConnection] var clientState = new AtomicReference[ConnectionState](NormalConnectionState(opQueue))
@@ -79,7 +79,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
           channelInternal = future.getChannel
           channelReady.countDown()
         } else {
-          clientBootstrap.releaseExternalResources()
+          isRunning.set(false)
           channelReady.countDown()
           throw future.getCause
         }
@@ -97,6 +97,9 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   }
 
   def send(cmd: Cmd): Future[Result] = {
+    if(!isRunning.get()) {
+      throw new RedisException("Connection closed")
+    }
     val f = ResultFuture(cmd)
     cmdQueue.offer((this, f), 10, TimeUnit.SECONDS)
     f.future
@@ -107,25 +110,26 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
     channel.write(f).addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
   }
 
-  def isOpen: Boolean = isRunning && channel.isOpen
+  def isOpen: Boolean = isRunning.get() && channel.isOpen
 
   def shutdown() {
-    isRunning = false
-    val channelClosed = new CountDownLatch(1)
+    if (isOpen) {
+      isRunning.set(false)
+      val channelClosed = new CountDownLatch(1)
 
-    channel.close().addListener(new ChannelFutureListener() {
-      override def operationComplete(channelFuture: ChannelFuture) = {
-        channelClosed.countDown()
+      channel.close().addListener(new ChannelFutureListener() {
+        override def operationComplete(channelFuture: ChannelFuture) = {
+          channelClosed.countDown()
+        }
+      })
+
+      try {
+        channelClosed.await(1, TimeUnit.MINUTES)
+      } catch {
+        case iex: InterruptedException =>
+          throw new RedisException("Interrupted while waiting for connection close")
       }
-    })
-
-    try {
-      channelClosed.await(1, TimeUnit.MINUTES)
-    } catch {
-      case iex: InterruptedException =>
-        throw new RedisException("Interrupted while waiting for connection close")
     }
-
   }
 }
 

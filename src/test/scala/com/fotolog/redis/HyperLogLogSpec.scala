@@ -18,7 +18,7 @@ class HyperLogLogSpec extends FlatSpec with Matchers with TestClient {
     client.pfcount("hll") shouldEqual 5
   }
 
-  it should "be able to merge values" in new TestClient {
+  it should "be able to merge values" in {
     client.pfadd("h1", "a", "b", "c", "d") shouldBe true
     client.pfadd("h2", "a", "b", "f", "g") shouldBe true
     client.pfmerge("h3", "h1", "h2") shouldBe true
