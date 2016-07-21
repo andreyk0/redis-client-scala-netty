@@ -2,19 +2,15 @@ language: scala
 scala:
 - 2.11.5
 - 2.11.8
-services:
-- redis-server
-addons:
-  apt:
-    packages:
-      - redis-server
 script:
-- redis-cli ping
 - sbt clean coverage test package
 after_success:
 - sbt coveralls
-- test "${TRAVIS_PULL_REQUEST}" = 'false' && sh "$TRAVIS_BUILD_DIR/.bintray.sh" && sbt publish
+- test "${TRAVIS_PULL_REQUEST}" = 'false' && sh "$TRAVIS_BUILD_DIR/.bintray.sh" &&
+  sbt publish
 env:
   global:
   - secure: D5e1W2+2vqny4JpF2wP2t1NYi6CrhtHStao8FKrOpHWBu8GwcRuIb5YcXw0Fp7l+IDHLlME/NOWNdYr/OgMjV5OWd4D8HSvmRb1oUZZayolIgjatY0tm0Ysg3v8i0fDc8jxDesrA5MpaIlPmqJte7uUoGv+TtGCX3mwx6w7LPOo=
   - secure: aY634KqigUiwZhH6NpkOmSvoyC35A/Fe6XjDpgWE32CwixgNDNt0n/dSI7amP0jrhzivZSeNUBU2LyuNHmpYRrSzFWtMm5+cSG7Bda1minfmvyVU66hEcUD6TWfXJH9kbbYHuOdWfsNchqQxWGVdudWglyOdyQdkUdQ/+Rptzw0=
+  - secure: Tgefaz4mFgYzjfnr0f5zaC5XLy+hPoaKpUkJw93fHrLZtCowSZy6CDS6D0BWsoTBJ/vnFGDuiHGs7xihzWJgt7qcsEYqTbLoBJhErF4sPOlIql+W/6MAEKRo+9LFaHZrbmYbxvMXNLg7kitFn1yz/oxfPRrIBzOfLwnhUNXM6D8=
+  - secure: bf8cW8LzslqC/qGOGn0BpshPOjEKI5+TwHx9ErZV4jiGXH8CNMll+gbO7KxPUoVIDLorjCCCvsC+EobjX/2mW22PCDwU+fDsy7PUdpYMZ02M++6jcejKHcg4cijHuqD8ArtxZe1SC7Gm/YDw2Q1zXmuwh4/x3BzCIIgMvFsI2T8=
