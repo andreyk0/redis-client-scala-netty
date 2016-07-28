@@ -16,38 +16,42 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
   publisher1.flushall
   subscriber.flushall
 
-  "A publish" should "return Int result" in {
+  "A publish" should "return a number of clients that received the message" in {
     publisher.publish[String]("test" , "Hello") shouldEqual 0
     subscriber.subscribe[String]("test"){(channel, msg) => None }
     publisher.publish[String]("test" , "Hi subscriber") shouldEqual 1
   }
 
   "A subscribe/unsubscribe" should "return String result" in {
-    var channelRes = "not used"
-    var msgRes = "not used"
     val latch = new CountDownLatch(1)
+    var receivedMessage = false
+    var messageData = "not used"
 
-    subscriber.subscribe[String]("test", "test1"){(channel, msg) =>
-      channelRes = channel
-      msgRes = msg
+    val subscriptionRes = client.subscribe[String]("baz", "test") { (channel, msg) =>
+      messageData = msg
+      receivedMessage = true
       latch.countDown()
-    } shouldEqual Seq(1, 2)
+    }
 
-    publisher.publish[String]("test", "Hello")
-    channelRes shouldEqual "test"
-    msgRes shouldEqual "Hello"
+    subscriptionRes shouldEqual Seq(1, 2)
+
+    var receivedMessage2 = false
+
+    client.subscribe[String]("b*", "tezz") { (channel, msg) =>
+      receivedMessage2 = true
+    }
+
+    publishMsg("test", "message")
+
     latch.await(5, TimeUnit.SECONDS)
+    Thread.sleep(300) // wait for second response
 
-    publisher1.publish[String]("test1", "World")
-    channelRes shouldEqual "test1"
-    msgRes shouldEqual "World"
-
-    subscriber.unsubscribe("test")
-    publisher.publish[String]("test", "Hello") shouldEqual 0
-    publisher1.publish[String]("test1", "1pub msg")
-    channelRes shouldEqual "test1"
-    msgRes shouldEqual "1pub msg"
+    receivedMessage shouldEqual true
+    receivedMessage2 shouldEqual false
+    messageData shouldEqual "message"
   }
+
+  private def publishMsg(channel: String, msg: String) { createClient().publish(channel, msg) }
 
 
 }

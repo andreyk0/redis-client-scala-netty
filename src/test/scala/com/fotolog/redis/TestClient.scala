@@ -9,8 +9,8 @@ trait TestClient extends BeforeAndAfterEach with BeforeAndAfterAll { this: Suite
 
   val client: RedisClient = createClient()
 
-  override def beforeEach() {
-    super.beforeEach()
+  override def beforeAll() {
+    super.beforeAll()
     client.flushall
   }
 
