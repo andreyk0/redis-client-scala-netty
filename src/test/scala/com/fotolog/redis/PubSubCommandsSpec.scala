@@ -1,5 +1,7 @@
 package com.fotolog.redis
 
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+
 import org.scalatest.{FlatSpec, Matchers}
 
 /**
@@ -23,14 +25,18 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
   "A subscribe/unsubscribe" should "return String result" in {
     var channelRes = "not used"
     var msgRes = "not used"
+    val latch = new CountDownLatch(1)
 
     subscriber.subscribe[String]("test", "test1"){(channel, msg) =>
       channelRes = channel
       msgRes = msg
-    }
+      latch.countDown()
+    } shouldEqual Seq(1, 2)
+
     publisher.publish[String]("test", "Hello")
     channelRes shouldEqual "test"
     msgRes shouldEqual "Hello"
+    latch.await(5, TimeUnit.SECONDS)
 
     publisher1.publish[String]("test1", "World")
     channelRes shouldEqual "test1"

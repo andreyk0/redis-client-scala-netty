@@ -2,15 +2,31 @@ language: scala
 scala:
 - 2.11.5
 - 2.11.8
+env:
+  global:
+  - REDIS_TAG=3.2.0
+  - secure: V+QVQZfSYPjdPfBiKsPta63CaIA33Xl6UhTZrWD+KCQ4AXjEKWdIag54ABAAw7gMt6lfVgq4R5J8WiTcAbFVXY62gN4OxzmdUxyOvcgexUAxraQV7QcKNu4TFsMGoSSUv9OM/+CbAyvFWsPXVEAQ/L9GsdmaXjNd6s6ggMr6gLs=
+  - secure: hQYfRhuuMhvOUiPPsK2xeFpqgv0pzMhw/9EiK1t+MuqyvSAdE159qzKciNprFmGbi6FDgKSu7E7745ukogSrENA2g9tcJR/YP++V/nuxTosH3CCuBDvmALkmYusY6fpYn1c238eB8Uka0X9tU46riU5LhKPaWcdJ0o2p6LW+rTQ=
+before_install:
+- export REDIS_BIN=$HOME/redis/${REDIS_TAG}/bin
+- |
+  if [ ! -x "$REDIS_BIN/redis-server" ]; then
+    # For proper caching we must build all redis versions
+    wget -c https://github.com/antirez/redis/archive/${REDIS_TAG}.tar.gz -O redis-${REDIS_TAG}.tar.gz
+    tar -xvf redis-${REDIS_TAG}.tar.gz
+    make -C redis-${REDIS_TAG} PREFIX=$HOME/redis/${REDIS_TAG} install
+  fi
+before_script:
+- '$REDIS_BIN/redis-server --daemonize yes --pidfile ./redis-server.pid --unixsocket
+  /tmp/aioredis.sock --port 6379 --save ""
+
+'
+- sleep 3
+- export REDIS_VERSION="$(redis-cli INFO SERVER | sed -n 2p)"
+- echo $REDIS_VERSION
 script:
 - sbt clean coverage test package
 after_success:
 - sbt coveralls
 - test "${TRAVIS_PULL_REQUEST}" = 'false' && sh "$TRAVIS_BUILD_DIR/.bintray.sh" &&
   sbt publish
-env:
-  global:
-  - secure: D5e1W2+2vqny4JpF2wP2t1NYi6CrhtHStao8FKrOpHWBu8GwcRuIb5YcXw0Fp7l+IDHLlME/NOWNdYr/OgMjV5OWd4D8HSvmRb1oUZZayolIgjatY0tm0Ysg3v8i0fDc8jxDesrA5MpaIlPmqJte7uUoGv+TtGCX3mwx6w7LPOo=
-  - secure: aY634KqigUiwZhH6NpkOmSvoyC35A/Fe6XjDpgWE32CwixgNDNt0n/dSI7amP0jrhzivZSeNUBU2LyuNHmpYRrSzFWtMm5+cSG7Bda1minfmvyVU66hEcUD6TWfXJH9kbbYHuOdWfsNchqQxWGVdudWglyOdyQdkUdQ/+Rptzw0=
-  - secure: Tgefaz4mFgYzjfnr0f5zaC5XLy+hPoaKpUkJw93fHrLZtCowSZy6CDS6D0BWsoTBJ/vnFGDuiHGs7xihzWJgt7qcsEYqTbLoBJhErF4sPOlIql+W/6MAEKRo+9LFaHZrbmYbxvMXNLg7kitFn1yz/oxfPRrIBzOfLwnhUNXM6D8=
-  - secure: bf8cW8LzslqC/qGOGn0BpshPOjEKI5+TwHx9ErZV4jiGXH8CNMll+gbO7KxPUoVIDLorjCCCvsC+EobjX/2mW22PCDwU+fDsy7PUdpYMZ02M++6jcejKHcg4cijHuqD8ArtxZe1SC7Gm/YDw2Q1zXmuwh4/x3BzCIIgMvFsI2T8=
