@@ -66,7 +66,7 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
     receivedMessage shouldEqual true
   }
 
-  "Command" should "fail after subscribe" in {
+  "A Subscribe" should "should disable any command" in {
     val client = createClient()
     client.subscribe[String]("channel") { (c, m) => }
 
@@ -76,25 +76,24 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
 
   }
 
-  /* TODO: @Test def testSubscribeUnsubscribe() {
-    val subscriptionRes = c.subscribe[String]("baz", "bar", "gee") { (channel, msg) =>
+  "Unsubscribe" should "fail after subscribe" in {
+    val client = createClient()
+    val subscriptionRes = client.subscribe[String]("baz", "bar", "gee") { (channel, msg) =>
       println("Subscriber1: Got data from channel " + channel + ":" + msg)
     }
 
-    assertEquals(Seq(1, 2, 3), subscriptionRes)
+    subscriptionRes shouldEqual Seq(1, 2, 3)
 
-    c.subscribe[String]("baz", "tee") { (channel, msg) =>
+    client.subscribe[String]("baz", "tee") { (channel, msg) =>
       println("Subscriber2: Got data from channel " + channel + ":" + msg)
     }
 
-    assertEquals(Seq(3, 2, 2, 1, 0), c.unsubscribe("baz", "gee", "fee", "tee", "bar"))
+    client.unsubscribe("baz", "gee", "fee", "tee", "bar") shouldEqual Seq(3, 2, 2, 1, 0)
 
     // we unsubscribed from all channels so now have to be able to send any command
-    assertTrue(c.set("key", "test"))
-    assertEquals("test", c.get[String]("key").get)
-  } */
+    client.set("key", "test") shouldBe true
+    client.get[String]("key") shouldEqual Some("test")
+  }
 
   private def publishMsg(channel: String, msg: String) { createClient().publish(channel, msg) }
-
-
 }
