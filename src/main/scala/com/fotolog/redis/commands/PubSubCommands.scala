@@ -44,4 +44,6 @@ private[redis] trait PubSubCommands extends ClientCommands {
     r.send(Unsubscribe(channels)).map(multiBulkDataResultToFilteredSeq(BinaryConverter.IntConverter))
 
   def unsubscribe(channels: String*) = await(unsubscribeAsync(channels:_*))
+
+  def unsubscribe = await(r.send(UnsubscribeAll()))
 }

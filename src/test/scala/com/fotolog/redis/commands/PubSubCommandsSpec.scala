@@ -9,14 +9,16 @@ import org.scalatest.{FlatSpec, Matchers}
   */
 class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
 
-  val publisher, publisher1 = createClient
-  val subscriber = createClient
-
   "A publish" should "return a number of clients that received the message" in {
-    publisher.flushall
+    val publisher = createClient
+    val subscriber = createClient
+
     publisher.publish[String]("test" , "Hello") shouldEqual 0
     subscriber.subscribe[String]("test"){(channel, msg) => None }
     publisher.publish[String]("test" , "Hi subscriber") shouldEqual 1
+
+    publisher.shutdown()
+    subscriber.shutdown()
   }
 
   "A subscribe/unsubscribe" should "publish and receive messages" in {
@@ -41,7 +43,6 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
     publishMsg("test", "message")
 
     latch.await(5, TimeUnit.SECONDS)
-    Thread.sleep(300) // wait for second response
 
     receivedMessage shouldEqual true
     receivedMessage2 shouldEqual false
@@ -52,7 +53,7 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
     val latch = new CountDownLatch(1)
     var receivedMessage = false
 
-    val subscriptionRes = createClient().subscribe[String]("glob*") { (channel, msg) =>
+    val subscriptionRes = createClient.subscribe[String]("glob*") { (channel, msg) =>
       receivedMessage = true
       latch.countDown()
     }
@@ -61,13 +62,13 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
 
     publishMsg("global", "message")
 
-    latch.await(5, TimeUnit.SECONDS)
+    latch.await(15, TimeUnit.SECONDS)
 
     receivedMessage shouldEqual true
   }
 
   "A Subscribe" should "should disable any command" in {
-    val client = createClient()
+    val client = createClient
     client.subscribe[String]("channel") { (c, m) => }
 
     intercept[RedisException] {
@@ -77,7 +78,7 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
   }
 
   "Unsubscribe" should "fail after subscribe" in {
-    val client = createClient()
+    val client = createClient
     val subscriptionRes = client.subscribe[String]("baz", "bar", "gee") { (channel, msg) =>
       println("Subscriber1: Got data from channel " + channel + ":" + msg)
     }
@@ -95,5 +96,26 @@ class PubSubCommandsSpec extends FlatSpec with Matchers with TestClient {
     client.get[String]("key") shouldEqual Some("test")
   }
 
-  private def publishMsg(channel: String, msg: String) { createClient().publish(channel, msg) }
+  "A unsubscribe all" should "work correctly" in {
+    val publisher = createClient
+    val subscriber = createClient
+    val latch = new CountDownLatch(1)
+
+    var msgsRes = "not used"
+
+    subscriber.subscribe[String]("test", "test1") { (channel, msg) =>
+      msgsRes = msg
+      latch.countDown()
+    }
+
+    publisher.publish[String]("test", "Hello")
+
+    latch.await(15, TimeUnit.SECONDS)
+
+    msgsRes shouldEqual "Hello"
+
+    subscriber.unsubscribe
+  }
+
+  private def publishMsg(channel: String, msg: String) { createClient.publish(channel, msg) }
 }

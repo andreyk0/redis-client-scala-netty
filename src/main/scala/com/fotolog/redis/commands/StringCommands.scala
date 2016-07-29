@@ -79,6 +79,6 @@ private[redis] trait StringCommands extends ClientCommands {
   def getrangeAsync[T](key: String, startOffset: Int, endOffset: Int)(implicit conv: BinaryConverter[T]): Future[Option[T]] =
     r.send(Getrange(key, startOffset, endOffset)).map(bulkDataResultToOpt(conv))
 
-  def substr[T](key: String, startOffset: Int, endOffset: Int)(implicit conv: BinaryConverter[T]): Option[T] =
+  def getrange[T](key: String, startOffset: Int, endOffset: Int)(implicit conv: BinaryConverter[T]): Option[T] =
     await { getrangeAsync(key, startOffset, endOffset)(conv) }
 }

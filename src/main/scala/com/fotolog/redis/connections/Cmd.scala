@@ -191,6 +191,7 @@ private[redis] object Cmd {
   val PUNSUBSCRIBE = "PUNSUBSCRIBE".getBytes
   val SUBSCRIBE = "SUBSCRIBE".getBytes
   val UNSUBSCRIBE = "UNSUBSCRIBE".getBytes
+  val UNSUBSCRIBEALL = "UNSUBSCRIBEALL".getBytes
 
   // scripting
   val EVAL = "EVAL".getBytes
@@ -512,6 +513,10 @@ case class Subscribe(channels: Seq[String], handler: MultiBulkDataResult => Unit
 case class Unsubscribe(channels: Seq[String]) extends Cmd {
   def asBin =
     (if(channels.exists(s => s.contains("*") || s.contains("?"))) PUNSUBSCRIBE else UNSUBSCRIBE) :: channels.toList.map(_.getBytes(charset))
+}
+
+case class UnsubscribeAll() extends Cmd {
+  def asBin = Seq(UNSUBSCRIBE)
 }
 
 // hyper log log

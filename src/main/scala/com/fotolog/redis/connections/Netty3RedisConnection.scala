@@ -97,7 +97,7 @@ class Netty3RedisConnection(val host: String, val port: Int) extends RedisConnec
   }
 
   def send(cmd: Cmd): Future[Result] = {
-    if(!isRunning.get()) {
+    if (!isRunning.get()) {
       throw new RedisException("Connection closed")
     }
     val f = ResultFuture(cmd)
